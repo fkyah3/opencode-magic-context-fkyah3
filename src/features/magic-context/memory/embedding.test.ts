@@ -1,15 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { cosineSimilarity, disposeEmbeddingModel, isEmbeddingModelLoaded } from "./embedding";
+import { describe, expect, it } from "bun:test";
+import { cosineSimilarity } from "./cosine-similarity";
+import { LocalEmbeddingProvider } from "./embedding-local";
+import { OpenAICompatibleEmbeddingProvider } from "./embedding-openai";
 
 describe("embedding module", () => {
-    beforeEach(async () => {
-        await disposeEmbeddingModel();
-    });
-
-    afterEach(async () => {
-        await disposeEmbeddingModel();
-    });
-
     describe("#given cosine similarity", () => {
         it("returns 1 for identical vectors", () => {
             //#when
@@ -64,18 +58,25 @@ describe("embedding module", () => {
         });
     });
 
-    describe("#given embedding model state", () => {
-        it("isEmbeddingModelLoaded returns false before init", () => {
-            //#then
-            expect(isEmbeddingModelLoaded()).toBe(false);
+    describe("#given embedding providers", () => {
+        it("local provider uses default model id and starts unloaded", () => {
+            const provider = new LocalEmbeddingProvider();
+
+            expect(provider.modelId).toBe("local:Xenova/all-MiniLM-L6-v2");
+            expect(provider.isLoaded()).toBe(false);
         });
 
-        it("disposeEmbeddingModel is safe to call when not loaded", async () => {
-            //#when
-            await disposeEmbeddingModel();
+        it("openai-compatible provider normalizes endpoint in model id", () => {
+            const provider = new OpenAICompatibleEmbeddingProvider({
+                endpoint: "http://localhost:1234/v1/",
+                model: "text-embedding-3-small",
+                apiKey: "secret",
+            });
 
-            //#then
-            expect(isEmbeddingModelLoaded()).toBe(false);
+            expect(provider.modelId).toBe(
+                "openai-compat:http://localhost:1234/v1:text-embedding-3-small",
+            );
+            expect(provider.isLoaded()).toBe(false);
         });
     });
 });

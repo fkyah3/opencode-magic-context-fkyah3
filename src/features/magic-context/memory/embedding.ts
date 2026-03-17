@@ -1,251 +1,151 @@
+import type { EmbeddingConfig } from "../../../config/schema/magic-context";
+import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "../../../config/schema/magic-context";
 import { log } from "../../../shared/logger";
+import { cosineSimilarity } from "./cosine-similarity";
+import { LocalEmbeddingProvider } from "./embedding-local";
+import type { EmbeddingProvider } from "./embedding-provider";
+import { OpenAICompatibleEmbeddingProvider } from "./embedding-openai";
 
-export interface EmbeddingProviderConfig {
-    embedding_provider?: string | null;
-}
-
-type EmbeddingPipelineResult = {
-    data: ArrayLike<number> | ArrayLike<number>[];
-    dims?: number[];
+const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
+    provider: "local",
+    model: DEFAULT_LOCAL_EMBEDDING_MODEL,
 };
 
-type EmbeddingPipeline = {
-    (
-        input: string | string[],
-        options: { pooling: "mean"; normalize: true },
-    ): Promise<EmbeddingPipelineResult>;
-    dispose?: () => Promise<void> | void;
-};
+let embeddingConfig: EmbeddingConfig = DEFAULT_EMBEDDING_CONFIG;
+let provider: EmbeddingProvider | null = null;
 
-type CreateEmbeddingPipeline = (
-    task: "feature-extraction",
-    model: "Xenova/all-MiniLM-L6-v2",
-    options: { quantized: boolean },
-) => Promise<EmbeddingPipeline>;
-
-let pipeline: unknown = null;
-let initPromise: Promise<void> | null = null;
-
-function embeddingsDisabled(providerConfig?: EmbeddingProviderConfig): boolean {
-    return providerConfig?.embedding_provider === "off";
-}
-
-function getPipeline(): EmbeddingPipeline | null {
-    return pipeline as EmbeddingPipeline | null;
-}
-
-function isArrayLikeNumber(value: unknown): value is ArrayLike<number> {
-    return typeof value === "object" && value !== null && "length" in value;
-}
-
-function toFloat32Array(values: ArrayLike<number>): Float32Array {
-    return values instanceof Float32Array
-        ? new Float32Array(values)
-        : Float32Array.from(Array.from(values));
-}
-
-function extractBatchEmbeddings(
-    result: EmbeddingPipelineResult,
-    expectedCount: number,
-): (Float32Array | null)[] {
-    const { data } = result;
-
-    if (
-        Array.isArray(data) &&
-        data.length === expectedCount &&
-        data.every((entry) => typeof entry !== "number" && isArrayLikeNumber(entry))
-    ) {
-        return data.map((entry) => toFloat32Array(entry));
+function resolveEmbeddingConfig(config?: EmbeddingConfig): EmbeddingConfig {
+    if (!config || config.provider === "local") {
+        return {
+            provider: "local",
+            model: config?.model?.trim() || DEFAULT_LOCAL_EMBEDDING_MODEL,
+        };
     }
 
-    if (!isArrayLikeNumber(data)) {
-        log("[magic-context] embedding batch returned unexpected data shape");
-        return Array.from({ length: expectedCount }, () => null);
+    if (config.provider === "openai-compatible") {
+        const apiKey = config.api_key?.trim();
+        return {
+            provider: "openai-compatible",
+            model: config.model.trim(),
+            endpoint: config.endpoint.trim(),
+            ...(apiKey ? { api_key: apiKey } : {}),
+        };
     }
 
-    const flatData = toFloat32Array(data);
-    const dimension = result.dims?.at(-1) ?? flatData.length / expectedCount;
-
-    if (
-        !Number.isInteger(dimension) ||
-        dimension <= 0 ||
-        flatData.length !== expectedCount * dimension
-    ) {
-        log("[magic-context] embedding batch returned invalid dimensions");
-        return Array.from({ length: expectedCount }, () => null);
-    }
-
-    const embeddings: Float32Array[] = [];
-    for (let index = 0; index < expectedCount; index++) {
-        embeddings.push(flatData.slice(index * dimension, (index + 1) * dimension));
-    }
-
-    return embeddings;
+    return { provider: "off" };
 }
 
-/**
- * Lazily initialize the embedding model. Only downloads/loads on first call.
- * Returns false if embedding provider is "off" or initialization fails.
- */
-export async function ensureEmbeddingModel(
-    providerConfig?: EmbeddingProviderConfig,
-): Promise<boolean> {
-    if (embeddingsDisabled(providerConfig)) {
+function createProvider(config: EmbeddingConfig): EmbeddingProvider | null {
+    if (config.provider === "off") {
+        return null;
+    }
+
+    if (config.provider === "openai-compatible") {
+        return new OpenAICompatibleEmbeddingProvider({
+            endpoint: config.endpoint,
+            model: config.model,
+            apiKey: config.api_key,
+        });
+    }
+
+    return new LocalEmbeddingProvider(config.model);
+}
+
+function getOrCreateProvider(): EmbeddingProvider | null {
+    if (provider) {
+        return provider;
+    }
+
+    provider = createProvider(embeddingConfig);
+    return provider;
+}
+
+export function initializeEmbedding(config: EmbeddingConfig): void {
+    const nextConfig = resolveEmbeddingConfig(config);
+    const nextModelId = createProvider(nextConfig)?.modelId ?? "off";
+    const previousProvider = provider;
+    const previousModelId =
+        previousProvider?.modelId ?? createProvider(embeddingConfig)?.modelId ?? "off";
+
+    if (previousModelId === nextModelId) {
+        embeddingConfig = nextConfig;
+        return;
+    }
+
+    embeddingConfig = nextConfig;
+    provider = null;
+
+    if (previousProvider) {
+        void previousProvider.dispose().catch((error) => {
+            log("[magic-context] embedding provider dispose failed:", error);
+        });
+    }
+}
+
+export function isEmbeddingEnabled(): boolean {
+    return embeddingConfig.provider !== "off";
+}
+
+export async function ensureEmbeddingModel(): Promise<boolean> {
+    const currentProvider = getOrCreateProvider();
+    if (!currentProvider) {
         return false;
     }
 
-    if (pipeline) {
-        return true;
-    }
-
-    if (initPromise) {
-        await initPromise;
-        return pipeline !== null;
-    }
-
-    initPromise = (async () => {
-        try {
-            const transformersModule = (await import("@huggingface/transformers")) as Record<
-                string,
-                unknown
-            >;
-            const createPipeline = transformersModule.pipeline as CreateEmbeddingPipeline;
-            pipeline = await createPipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
-                quantized: true,
-            });
-            log("[magic-context] embedding model loaded: Xenova/all-MiniLM-L6-v2");
-        } catch (error) {
-            log("[magic-context] embedding model failed to load:", error);
-            pipeline = null;
-        } finally {
-            initPromise = null;
-        }
-    })();
-
-    await initPromise;
-    return pipeline !== null;
+    return currentProvider.initialize();
 }
 
-/**
- * Embed a single text string. Returns null if embeddings are disabled or init failed.
- */
-export async function embedText(
-    text: string,
-    providerConfig?: EmbeddingProviderConfig,
-): Promise<Float32Array | null> {
-    if (!(await ensureEmbeddingModel(providerConfig))) {
+export async function embedText(text: string): Promise<Float32Array | null> {
+    const currentProvider = getOrCreateProvider();
+    if (!currentProvider) {
         return null;
     }
 
-    try {
-        const embeddingPipeline = getPipeline();
-        if (!embeddingPipeline) {
-            return null;
-        }
-
-        const result = await embeddingPipeline(text, {
-            pooling: "mean",
-            normalize: true,
-        });
-
-        return extractBatchEmbeddings(result, 1)[0] ?? null;
-    } catch (error) {
-        log("[magic-context] embedding failed:", error);
+    if (!(await currentProvider.initialize())) {
         return null;
     }
+
+    return currentProvider.embed(text);
 }
 
-export async function embed(
-    text: string,
-    providerConfig?: EmbeddingProviderConfig,
-): Promise<Float32Array | null> {
-    return embedText(text, providerConfig);
+export async function embed(text: string): Promise<Float32Array | null> {
+    return embedText(text);
 }
 
-/**
- * Embed multiple texts in a batch. Returns null entries for failures.
- */
-export async function embedBatch(
-    texts: string[],
-    providerConfig?: EmbeddingProviderConfig,
-): Promise<(Float32Array | null)[]> {
+export async function embedBatch(texts: string[]): Promise<(Float32Array | null)[]> {
     if (texts.length === 0) {
         return [];
     }
 
-    if (!(await ensureEmbeddingModel(providerConfig))) {
+    const currentProvider = getOrCreateProvider();
+    if (!currentProvider) {
         return Array.from({ length: texts.length }, () => null);
     }
 
-    try {
-        const embeddingPipeline = getPipeline();
-        if (!embeddingPipeline) {
-            return Array.from({ length: texts.length }, () => null);
-        }
-
-        const result = await embeddingPipeline(texts, {
-            pooling: "mean",
-            normalize: true,
-        });
-
-        return extractBatchEmbeddings(result, texts.length);
-    } catch (error) {
-        log("[magic-context] embedding batch failed:", error);
+    if (!(await currentProvider.initialize())) {
         return Array.from({ length: texts.length }, () => null);
     }
+
+    return currentProvider.embedBatch(texts);
 }
 
-/**
- * Compute cosine similarity between two embedding vectors.
- * Pure math - no model dependency.
- */
-export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-    if (a.length !== b.length) {
-        return 0;
-    }
-
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let index = 0; index < a.length; index++) {
-        dotProduct += a[index]! * b[index]!;
-        normA += a[index]! * a[index]!;
-        normB += b[index]! * b[index]!;
-    }
-
-    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-    return denominator === 0 ? 0 : dotProduct / denominator;
+export function getEmbeddingModelId(): string {
+    return getOrCreateProvider()?.modelId ?? "off";
 }
 
-/**
- * Check if the embedding model is currently loaded.
- */
+export { cosineSimilarity };
+
 export function isEmbeddingModelLoaded(): boolean {
-    return pipeline !== null;
+    return provider?.isLoaded() ?? false;
 }
 
-/**
- * Dispose the loaded model to free memory.
- */
 export async function disposeEmbeddingModel(): Promise<void> {
-    if (initPromise) {
-        await initPromise;
-    }
+    const currentProvider = provider;
+    provider = null;
 
-    const embeddingPipeline = getPipeline();
-    if (!embeddingPipeline) {
-        pipeline = null;
-        initPromise = null;
+    if (!currentProvider) {
         return;
     }
 
-    try {
-        await embeddingPipeline.dispose?.();
-    } catch (error) {
-        log("[magic-context] embedding model dispose failed:", error);
-    } finally {
-        pipeline = null;
-        initPromise = null;
-    }
+    await currentProvider.dispose();
 }

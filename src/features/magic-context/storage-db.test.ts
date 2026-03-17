@@ -143,6 +143,54 @@ describe("storage-db", () => {
 
             expect(columns.map((column) => column.name)).toContain("compartment_in_progress");
         });
+
+        it("#when an existing memory_embeddings table lacks model_id #then openDatabase adds the missing column", () => {
+            const dataHome = useTempDataHome("storage-db-migrate-embedding-model-");
+            const dbPath = resolveDbPath(dataHome);
+            mkdirSync(join(dataHome, "opencode", "storage", "plugin", "magic-context"), {
+                recursive: true,
+            });
+            const legacyDb = new Database(dbPath);
+            legacyDb.run(`
+        CREATE TABLE memories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_path TEXT NOT NULL,
+          category TEXT NOT NULL,
+          content TEXT NOT NULL,
+          normalized_hash TEXT NOT NULL,
+          source_session_id TEXT,
+          source_type TEXT DEFAULT 'historian',
+          seen_count INTEGER DEFAULT 1,
+          retrieval_count INTEGER DEFAULT 0,
+          first_seen_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          last_seen_at INTEGER NOT NULL,
+          last_retrieved_at INTEGER,
+          status TEXT DEFAULT 'active',
+          expires_at INTEGER,
+          verification_status TEXT DEFAULT 'unverified',
+          verified_at INTEGER,
+          superseded_by_memory_id INTEGER,
+          merged_from TEXT,
+          metadata_json TEXT,
+          UNIQUE(project_path, category, normalized_hash)
+        );
+
+        CREATE TABLE memory_embeddings (
+          memory_id INTEGER PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
+          embedding BLOB NOT NULL
+        );
+      `);
+            legacyDb.close(false);
+
+            const db = openDatabase();
+            const columns = db.prepare("PRAGMA table_info(memory_embeddings)").all() as Array<{
+                name?: string;
+            }>;
+
+            expect(columns.map((column) => column.name)).toContain("model_id");
+        });
     });
 
     describe("#given closeDatabase", () => {

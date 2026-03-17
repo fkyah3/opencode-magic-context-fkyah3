@@ -4,12 +4,14 @@ import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, it } from "bun:test";
 import {
     archiveMemory,
+    clearAllEmbeddings,
     deleteEmbedding,
     deleteMemory,
     getMemoriesByProject,
     getMemoryByHash,
     getMemoryById,
     getMemoryCount,
+    getStoredModelId,
     insertMemory,
     loadAllEmbeddings,
     saveEmbedding,
@@ -53,7 +55,8 @@ function makeMemoryDatabase(): Database {
 
     CREATE TABLE IF NOT EXISTS memory_embeddings (
       memory_id INTEGER PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
-      embedding BLOB NOT NULL
+      embedding BLOB NOT NULL,
+      model_id TEXT
     );
 
     CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
@@ -257,17 +260,34 @@ describe("storage-memory", () => {
                 content: "Prefer createOther naming",
             });
 
-            saveEmbedding(db, memoryA.id, new Float32Array([0.25, 0.5, 0.75]));
-            saveEmbedding(db, memoryB.id, new Float32Array([1, 2, 3]));
+            saveEmbedding(db, memoryA.id, new Float32Array([0.25, 0.5, 0.75]), "local:model-a");
+            saveEmbedding(db, memoryB.id, new Float32Array([1, 2, 3]), "local:model-a");
 
             const embeddings = loadAllEmbeddings(db, "/repo/project");
 
             expect(Array.from(embeddings.keys())).toEqual([memoryA.id]);
             expect(Array.from(embeddings.get(memoryA.id) ?? [])).toEqual([0.25, 0.5, 0.75]);
+            expect(getStoredModelId(db)).toBe("local:model-a");
 
             deleteEmbedding(db, memoryA.id);
 
             expect(loadAllEmbeddings(db, "/repo/project")).toEqual(new Map());
+        });
+
+        it("#when clearing all embeddings #then stored vectors and model id are removed", () => {
+            db = makeMemoryDatabase();
+            const memory = insertMemory(db, {
+                projectPath: "/repo/project",
+                category: "NAMING",
+                content: "Prefer createMemoryStore naming",
+            });
+
+            saveEmbedding(db, memory.id, new Float32Array([0.25, 0.5, 0.75]), "local:model-b");
+
+            clearAllEmbeddings(db);
+
+            expect(loadAllEmbeddings(db, "/repo/project")).toEqual(new Map());
+            expect(getStoredModelId(db)).toBeNull();
         });
     });
 

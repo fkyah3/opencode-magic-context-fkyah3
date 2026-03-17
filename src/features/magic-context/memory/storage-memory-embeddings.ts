@@ -7,9 +7,15 @@ interface EmbeddingRow {
     embedding: Uint8Array | ArrayBuffer;
 }
 
+interface StoredModelIdRow {
+    modelId: string | null;
+}
+
 const saveEmbeddingStatements = new WeakMap<Database, PreparedStatement>();
 const loadAllEmbeddingsStatements = new WeakMap<Database, PreparedStatement>();
 const deleteEmbeddingStatements = new WeakMap<Database, PreparedStatement>();
+const getStoredModelIdStatements = new WeakMap<Database, PreparedStatement>();
+const clearAllEmbeddingsStatements = new WeakMap<Database, PreparedStatement>();
 
 function isEmbeddingBlob(value: unknown): value is Uint8Array | ArrayBuffer {
     return value instanceof Uint8Array || value instanceof ArrayBuffer;
@@ -34,7 +40,7 @@ function getSaveEmbeddingStatement(db: Database): PreparedStatement {
     let stmt = saveEmbeddingStatements.get(db);
     if (!stmt) {
         stmt = db.prepare(
-            "INSERT INTO memory_embeddings (memory_id, embedding) VALUES (?, ?) ON CONFLICT(memory_id) DO UPDATE SET embedding = excluded.embedding",
+            "INSERT INTO memory_embeddings (memory_id, embedding, model_id) VALUES (?, ?, ?) ON CONFLICT(memory_id) DO UPDATE SET embedding = excluded.embedding, model_id = excluded.model_id",
         );
         saveEmbeddingStatements.set(db, stmt);
     }
@@ -61,9 +67,34 @@ function getDeleteEmbeddingStatement(db: Database): PreparedStatement {
     return stmt;
 }
 
-export function saveEmbedding(db: Database, memoryId: number, embedding: Float32Array): void {
+function getStoredModelIdStatement(db: Database): PreparedStatement {
+    let stmt = getStoredModelIdStatements.get(db);
+    if (!stmt) {
+        stmt = db.prepare(
+            "SELECT model_id AS modelId FROM memory_embeddings WHERE model_id IS NOT NULL LIMIT 1",
+        );
+        getStoredModelIdStatements.set(db, stmt);
+    }
+    return stmt;
+}
+
+function getClearAllEmbeddingsStatement(db: Database): PreparedStatement {
+    let stmt = clearAllEmbeddingsStatements.get(db);
+    if (!stmt) {
+        stmt = db.prepare("DELETE FROM memory_embeddings");
+        clearAllEmbeddingsStatements.set(db, stmt);
+    }
+    return stmt;
+}
+
+export function saveEmbedding(
+    db: Database,
+    memoryId: number,
+    embedding: Float32Array,
+    modelId: string,
+): void {
     const blob = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
-    getSaveEmbeddingStatement(db).run(memoryId, blob);
+    getSaveEmbeddingStatement(db).run(memoryId, blob, modelId);
 }
 
 export function loadAllEmbeddings(db: Database, projectPath: string): Map<number, Float32Array> {
@@ -79,4 +110,13 @@ export function loadAllEmbeddings(db: Database, projectPath: string): Map<number
 
 export function deleteEmbedding(db: Database, memoryId: number): void {
     getDeleteEmbeddingStatement(db).run(memoryId);
+}
+
+export function getStoredModelId(db: Database): string | null {
+    const row = getStoredModelIdStatement(db).get() as StoredModelIdRow | undefined;
+    return typeof row?.modelId === "string" ? row.modelId : null;
+}
+
+export function clearAllEmbeddings(db: Database): void {
+    getClearAllEmbeddingsStatement(db).run();
 }

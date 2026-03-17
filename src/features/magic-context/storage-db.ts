@@ -102,7 +102,8 @@ function initializeDatabase(db: Database): void {
 
     CREATE TABLE IF NOT EXISTS memory_embeddings (
       memory_id INTEGER PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
-      embedding BLOB NOT NULL
+      embedding BLOB NOT NULL,
+      model_id TEXT
     );
 
     CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
@@ -168,6 +169,7 @@ function initializeDatabase(db: Database): void {
     ensureColumn(db, "session_meta", "system_prompt_hash", "INTEGER DEFAULT 0");
     ensureColumn(db, "compartments", "start_message_id", "TEXT DEFAULT ''");
     ensureColumn(db, "compartments", "end_message_id", "TEXT DEFAULT ''");
+    ensureColumn(db, "memory_embeddings", "model_id", "TEXT");
 }
 
 function ensureColumn(db: Database, table: string, column: string, definition: string): void {
