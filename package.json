@@ -1,0 +1,32 @@
+{
+  "name": "@cortexkit/magic-context-opencode",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OpenCode plugin for Magic Context — cross-session memory and context management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ualtinok/opencode-magic-context"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "prepublishOnly": "tsc"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.2.26",
+    "@huggingface/transformers": "^3.5.1",
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}
