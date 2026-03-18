@@ -15,7 +15,6 @@ import { log } from "../../shared/logger";
 import { CTX_MEMORY_DESCRIPTION, CTX_MEMORY_TOOL_NAME } from "./constants";
 import type { CtxMemoryArgs, CtxMemoryToolDeps } from "./types";
 
-const GLOBAL_MEMORY_PROJECT_PATH = "__global__";
 const MAX_CONTENT_PREVIEW_LENGTH = 120;
 const MEMORY_CATEGORIES = new Set<string>(CATEGORY_PRIORITY);
 
@@ -84,10 +83,6 @@ function queueMemoryEmbedding(deps: CtxMemoryToolDeps, memoryId: number, content
     });
 }
 
-function getScopedProjectPath(args: CtxMemoryArgs, projectPath: string): string {
-    return args.scope === "global" ? GLOBAL_MEMORY_PROJECT_PATH : projectPath;
-}
-
 function getValidatedCategory(category: string | undefined): MemoryCategory | null {
     const trimmedCategory = category?.trim();
 
@@ -125,10 +120,6 @@ function createCtxMemoryTool(deps: CtxMemoryToolDeps): ToolDefinition {
                 .number()
                 .optional()
                 .describe("Memory ID (required for delete and promote)"),
-            scope: tool.schema
-                .enum(["project", "global"])
-                .optional()
-                .describe("Scope for write: project-specific or global across all projects"),
         },
         async execute(args: CtxMemoryArgs, toolContext) {
             if (!deps.memoryEnabled) {
@@ -152,7 +143,7 @@ function createCtxMemoryTool(deps: CtxMemoryToolDeps): ToolDefinition {
                 }
 
                 const memory = insertMemory(deps.db, {
-                    projectPath: getScopedProjectPath(args, deps.projectPath),
+                    projectPath: deps.projectPath,
                     category,
                     content,
                     sourceSessionId: toolContext.sessionID,
@@ -161,7 +152,7 @@ function createCtxMemoryTool(deps: CtxMemoryToolDeps): ToolDefinition {
 
                 queueMemoryEmbedding(deps, memory.id, content);
 
-                return `Saved memory [ID: ${memory.id}] in ${category} (${args.scope === "global" ? "global" : "project"} scope).`;
+                return `Saved memory [ID: ${memory.id}] in ${category}.`;
             }
 
             if (args.action === "delete") {
@@ -197,23 +188,18 @@ function createCtxMemoryTool(deps: CtxMemoryToolDeps): ToolDefinition {
                 return `Error: Unknown memory category '${requestedCategory}'.`;
             }
 
-            const projectMemories = getMemoriesByProject(deps.db, deps.projectPath).filter(
-                (memory) => !requestedCategory || memory.category === requestedCategory,
-            );
-            const globalMemories = getMemoriesByProject(deps.db, GLOBAL_MEMORY_PROJECT_PATH).filter(
+            const memories = getMemoriesByProject(deps.db, deps.projectPath).filter(
                 (memory) => !requestedCategory || memory.category === requestedCategory,
             );
 
-            if (projectMemories.length === 0 && globalMemories.length === 0) {
+            if (memories.length === 0) {
                 return "No cross-session memories stored yet.";
             }
 
-            return [
-                formatScopeSection("Project Memories", projectMemories),
-                formatScopeSection("Global Memories", globalMemories),
-            ]
-                .filter((section): section is string => section !== null)
-                .join("\n\n");
+            return (
+                formatScopeSection("Project Memories", memories) ??
+                "No cross-session memories stored yet."
+            );
         },
     });
 }

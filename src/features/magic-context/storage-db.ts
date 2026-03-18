@@ -175,6 +175,8 @@ export function initializeDatabase(db: Database): void {
     ensureColumn(db, "compartments", "start_message_id", "TEXT DEFAULT ''");
     ensureColumn(db, "compartments", "end_message_id", "TEXT DEFAULT ''");
     ensureColumn(db, "memory_embeddings", "model_id", "TEXT");
+    ensureColumn(db, "session_meta", "memory_block_cache", "TEXT DEFAULT ''");
+    ensureColumn(db, "session_meta", "memory_block_count", "INTEGER DEFAULT 0");
 }
 
 function ensureColumn(db: Database, table: string, column: string, definition: string): void {

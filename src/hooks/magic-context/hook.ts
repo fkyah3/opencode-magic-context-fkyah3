@@ -132,8 +132,6 @@ export function createMagicContextHook(deps: MagicContextDeps) {
     const liveModelBySession = new Map<string, { providerID: string; modelID: string }>();
     const recentReduceBySession = new Map<string, number>();
     const toolUsageSinceUserTurn = new Map<string, number>();
-    const sidekickState = { ranSessions: new Set<string>() };
-
     const nudgerWithRecentReduce = createNudger({
         protected_tags: deps.config.protected_tags,
         nudge_interval_tokens: deps.config.nudge_interval_tokens ?? DEFAULT_NUDGE_INTERVAL_TOKENS,
@@ -162,8 +160,6 @@ export function createMagicContextHook(deps: MagicContextDeps) {
                   injectionBudgetTokens: deps.config.memory.injection_budget_tokens,
               }
             : undefined,
-        sidekickConfig: deps.config.sidekick,
-        sidekickState,
         compartmentTokenBudget:
             deps.config.compartment_token_budget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
         historianTimeoutMs: deps.config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
@@ -244,7 +240,6 @@ export function createMagicContextHook(deps: MagicContextDeps) {
             emergencyNudgeFired,
             flushedSessions,
             lastHeuristicsTurnId,
-            sidekickRanSessions: sidekickState.ranSessions,
             client: deps.client,
             protectedTags: deps.config.protected_tags,
         }),

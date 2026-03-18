@@ -205,10 +205,7 @@ function createCtxRecallTool(deps: CtxRecallToolDeps): ToolDefinition {
             const limit = normalizeLimit(args.limit);
             const category = normalizeCategory(args.category);
             const projectMemories = filterByCategory(
-                [
-                    ...getMemoriesByProject(deps.db, deps.projectPath),
-                    ...getMemoriesByProject(deps.db, "__global__"),
-                ],
+                getMemoriesByProject(deps.db, deps.projectPath),
                 category,
             );
             const ftsLimit = Math.max(limit * 5, projectMemories.length, DEFAULT_RECALL_LIMIT);

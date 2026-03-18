@@ -154,21 +154,21 @@ describe("createCtxMemoryTools", () => {
             expect(result).toContain("Unknown memory category");
         });
 
-        it("uses __global__ scope when scope is global", async () => {
+        it("always uses project scope for writes", async () => {
             await tools.ctx_memory.execute(
                 {
                     action: "write",
                     category: "USER_PREFERENCES",
                     content: "Keep answers dense.",
-                    scope: "global",
+                    // scope parameter removed — all memories are project-scoped
                 },
                 toolContext(),
             );
 
-            const memories = getMemoriesByProject(db, "__global__");
+            const memories = getMemoriesByProject(db, "/repo/project");
 
             expect(memories).toHaveLength(1);
-            expect(memories[0]?.projectPath).toBe("__global__");
+            expect(memories[0]?.projectPath).toBe("/repo/project");
         });
 
         it("uses project path when scope is project or default", async () => {
@@ -261,22 +261,21 @@ describe("createCtxMemoryTools", () => {
     });
 
     describe("#given list action", () => {
-        it("lists all project and global memories", async () => {
+        it("lists project memories only", async () => {
             insertMemory(db, {
                 projectPath: "/repo/project",
                 category: "USER_DIRECTIVES",
                 content: "Always run bun test before finishing.",
             });
             insertMemory(db, {
-                projectPath: "__global__",
+                projectPath: "/repo/project",
                 category: "USER_PREFERENCES",
                 content: "Keep answers terse.",
             });
 
             const result = await tools.ctx_memory.execute({ action: "list" }, toolContext());
 
-            expect(result).toContain("## Project Memories (1 total)");
-            expect(result).toContain("## Global Memories (1 total)");
+            expect(result).toContain("## Project Memories (2 total)");
             expect(result).toContain("### USER_DIRECTIVES (1)");
             expect(result).toContain("### USER_PREFERENCES (1)");
         });

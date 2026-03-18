@@ -126,7 +126,7 @@ describe("buildMemoryInjectionBlock", () => {
             );
         });
 
-        it("includes both project and global memories", async () => {
+        it("includes only project-scoped memories", async () => {
             //#given
             db = makeMemoryDatabase();
             insertTestMemory({
@@ -135,9 +135,9 @@ describe("buildMemoryInjectionBlock", () => {
                 content: "Project rule",
             });
             insertTestMemory({
-                projectPath: "__global__",
+                projectPath: "/other/project",
                 category: "USER_DIRECTIVES",
-                content: "Global rule",
+                content: "Other project rule",
             });
 
             //#when
@@ -145,7 +145,7 @@ describe("buildMemoryInjectionBlock", () => {
 
             //#then
             expect(result).toContain("- Project rule");
-            expect(result).toContain("- Global rule");
+            expect(result).not.toContain("- Other project rule");
         });
     });
 

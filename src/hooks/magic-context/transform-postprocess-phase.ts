@@ -19,7 +19,12 @@ import {
 } from "./inject-compartments";
 import type { NudgePlacementStore } from "./nudge-placement-store";
 import type { ContextNudge } from "./nudger";
-import { clearOldReasoning, stripClearedReasoning, stripInlineThinking } from "./strip-content";
+import {
+    clearOldReasoning,
+    stripClearedReasoning,
+    stripDroppedPlaceholderMessages,
+    stripInlineThinking,
+} from "./strip-content";
 import {
     appendReminderToLatestUserMessage,
     countMessagesSinceLastUser,
@@ -236,6 +241,15 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
                     `skipped ${compartmentResult.skippedVisibleMessages} visible messages)`,
             );
         }
+    }
+
+    // Remove messages that are nothing but [dropped §N§] placeholders.
+    // These shells waste tokens — there is no recall mechanism to use them.
+    // MUST run AFTER compartment injection: renderCompartmentInjection checks whether
+    // messages[0] is a dropped placeholder to decide if it needs a synthetic carrier message.
+    const strippedDropped = stripDroppedPlaceholderMessages(args.messages);
+    if (strippedDropped > 0) {
+        log(`[magic-context] stripped ${strippedDropped} empty dropped-placeholder messages`);
     }
 
     const pendingUserTurnReminder = getPersistedStickyTurnReminder(args.db, args.sessionId);

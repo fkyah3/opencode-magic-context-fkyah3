@@ -217,16 +217,13 @@ describe("createTransform heuristic cleanup persistence", () => {
         await transform({}, { messages: executePass });
 
         const executeInjection = getMessage(executePass, "m-injection-only");
-        expect(executeInjection).toBeDefined();
-        expect(getTextPart(executeInjection!).text).toBe("[dropped §2§]");
+        expect(executeInjection).toBeUndefined();
 
         schedulerDecision.mockImplementation(() => "defer");
         const deferPass = buildInjectionOnlyMessages();
         await transform({}, { messages: deferPass });
 
         const deferredInjection = getMessage(deferPass, "m-injection-only");
-        expect(deferredInjection).toBeDefined();
-        expect(getTextPart(deferredInjection!).text).toBe("[dropped §2§]");
-        expect(getTextPart(deferredInjection!).text).not.toContain("[Category+Skill Reminder]");
+        expect(deferredInjection).toBeUndefined();
     });
 });

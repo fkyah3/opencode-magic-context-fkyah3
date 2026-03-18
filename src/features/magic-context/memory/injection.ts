@@ -57,22 +57,6 @@ function groupMemoriesByCategory(memories: Memory[]): Map<MemoryCategory, Memory
     return memoriesByCategory;
 }
 
-function dedupeMemories(memories: Memory[]): Memory[] {
-    const seen = new Set<string>();
-    const deduped: Memory[] = [];
-
-    for (const memory of memories) {
-        if (seen.has(memory.normalizedHash)) {
-            continue;
-        }
-
-        seen.add(memory.normalizedHash);
-        deduped.push(memory);
-    }
-
-    return deduped;
-}
-
 /**
  * Build the <project-memory> XML injection block from stored memories.
  * Returns null if no memories are available for the project.
@@ -108,10 +92,7 @@ export async function buildMemoryInjectionBlock(
         }
     }
 
-    const mergedMemories = dedupeMemories([
-        ...getMemoriesByProject(db, projectPath, ["active", "permanent"]),
-        ...getMemoriesByProject(db, "__global__", ["active", "permanent"]),
-    ]);
+    const mergedMemories = getMemoriesByProject(db, projectPath, ["active", "permanent"]);
 
     if (mergedMemories.length === 0) {
         return null;

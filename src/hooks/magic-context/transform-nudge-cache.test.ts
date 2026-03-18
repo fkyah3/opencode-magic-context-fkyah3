@@ -122,8 +122,9 @@ describe("createTransform nudge cache handling", () => {
         //#when
         await transform({}, { messages: secondPass });
 
-        //#then
-        expect(firstText(secondPass[1]!)).not.toContain("[old nudge]");
+        //#then — user (tag 1) is stripped; assistant moves to index 0
+        expect(secondPass).toHaveLength(1);
+        expect(firstText(secondPass[0]!)).not.toContain("[old nudge]");
         expect(getPersistedNudgePlacement(db, "ses-1")).toBeNull();
     });
 
@@ -158,8 +159,8 @@ describe("createTransform nudge cache handling", () => {
         //#when
         await transform({}, { messages: secondPass });
 
-        //#then
-        expect(firstText(secondPass[1]!)).not.toContain("[old nudge]");
+        //#then — assistant (tag 2) is stripped; only user at index 0
+        expect(secondPass).toHaveLength(1);
         expect(getPersistedNudgePlacement(db, "ses-1")).toBeNull();
     });
 

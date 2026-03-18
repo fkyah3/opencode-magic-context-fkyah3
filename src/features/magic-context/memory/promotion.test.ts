@@ -143,7 +143,7 @@ describe("promotion", () => {
             expect(memory?.projectPath).toBe("/repo/project");
         });
 
-        it("uses __global__ for USER_PREFERENCES", () => {
+        it("stores USER_PREFERENCES under project path", () => {
             db = makeMemoryDatabase();
 
             promoteSessionFactsToMemory(db, "ses-1", "/repo/project", [
@@ -152,15 +152,15 @@ describe("promotion", () => {
 
             const memory = getMemoryByHash(
                 db,
-                "__global__",
+                "/repo/project",
                 "USER_PREFERENCES",
                 computeNormalizedHash("Prefer concise answers"),
             );
 
-            expect(memory?.projectPath).toBe("__global__");
+            expect(memory?.projectPath).toBe("/repo/project");
         });
 
-        it("uses __global__ for USER_DIRECTIVES", () => {
+        it("stores USER_DIRECTIVES under project path", () => {
             db = makeMemoryDatabase();
 
             promoteSessionFactsToMemory(db, "ses-1", "/repo/project", [
@@ -169,12 +169,12 @@ describe("promotion", () => {
 
             const memory = getMemoryByHash(
                 db,
-                "__global__",
+                "/repo/project",
                 "USER_DIRECTIVES",
                 computeNormalizedHash("Run tests before finishing"),
             );
 
-            expect(memory?.projectPath).toBe("__global__");
+            expect(memory?.projectPath).toBe("/repo/project");
         });
 
         it("sets expires_at for WORKFLOW_RULES based on TTL", () => {

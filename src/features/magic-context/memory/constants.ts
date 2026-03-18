@@ -24,18 +24,6 @@ export const CATEGORY_PRIORITY: MemoryCategory[] = [
     "KNOWN_ISSUES",
 ];
 
-export const CATEGORY_DEFAULT_SCOPE: Record<MemoryCategory, "project" | "global"> = {
-    ARCHITECTURE_DECISIONS: "project",
-    CONSTRAINTS: "project",
-    CONFIG_DEFAULTS: "project",
-    NAMING: "project",
-    USER_PREFERENCES: "global",
-    USER_DIRECTIVES: "global",
-    ENVIRONMENT: "project",
-    WORKFLOW_RULES: "project",
-    KNOWN_ISSUES: "project",
-};
-
 // TTL in milliseconds, null = permanent
 export const CATEGORY_DEFAULT_TTL: Partial<Record<MemoryCategory, number>> = {
     WORKFLOW_RULES: 90 * 24 * 60 * 60 * 1000, // 90 days

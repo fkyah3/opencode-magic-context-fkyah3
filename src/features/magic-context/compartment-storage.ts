@@ -204,6 +204,11 @@ export function replaceAllCompartmentState(
         for (const note of notes) {
             noteStmt.run(sessionId, note, now);
         }
+
+        // Clear cached memory block so next injection renders fresh (historian run already busts cache)
+        db.prepare(
+            "UPDATE session_meta SET memory_block_cache = '', memory_block_count = 0 WHERE session_id = ?",
+        ).run(sessionId);
     })();
 }
 
@@ -211,8 +216,14 @@ export function buildCompartmentBlock(
     compartments: Compartment[],
     facts: SessionFact[],
     notes: SessionNote[] = [],
+    memoryBlock?: string,
 ): string {
     const lines: string[] = [];
+
+    if (memoryBlock) {
+        lines.push(memoryBlock);
+        lines.push("");
+    }
 
     for (const c of compartments) {
         lines.push(`<compartment title="${escapeXmlAttr(c.title)}">`);

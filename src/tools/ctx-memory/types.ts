@@ -5,7 +5,6 @@ export interface CtxMemoryArgs {
     content?: string;
     category?: string;
     id?: number;
-    scope?: "project" | "global";
 }
 
 export interface CtxMemoryToolDeps {

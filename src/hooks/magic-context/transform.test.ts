@@ -370,7 +370,8 @@ describe("createTransform", () => {
         expect(text(messages[0]!, 0)).toContain("<session-history>");
         expect(text(messages[0]!, 0)).toContain("Summarized earlier work.");
         expect(messages[0]?.info.id).toBeUndefined();
-        expect(text(messages[1]!, 0)).toBe(`[dropped §${droppedCarrierTag!.tagNumber}§]`);
+        expect(messages).toHaveLength(2);
+        expect(text(messages[1]!, 0)).toContain("new 5");
     });
 
     it("creates a synthetic history carrier when all visible messages are already covered", async () => {
@@ -683,8 +684,7 @@ describe("createTransform", () => {
         await transform({}, { messages: secondPass });
 
         //#then
-        expect(text(secondPass[0], 0)).toBe("[dropped §1§]");
-        expect(secondPass).toHaveLength(1);
+        expect(secondPass).toHaveLength(0);
         expect(getTagById(db, "ses-1", 1)?.status).toBe("dropped");
         expect(getTagById(db, "ses-1", 2)?.status).toBe("dropped");
         expect(clearPendingOps(db, "ses-1")).toBeUndefined();
@@ -745,8 +745,8 @@ describe("createTransform", () => {
         await transform({}, { messages: secondPass });
 
         //#then
+        expect(secondPass).toHaveLength(1);
         expect(text(secondPass[0], 0)).toStartWith("\u00a71\u00a7 ");
-        expect(text(secondPass[1], 0)).toBe("[dropped \u00a72\u00a7]");
     });
 
     it("keeps reduced magic-context support for subagent sessions", async () => {
@@ -797,16 +797,28 @@ describe("createTransform", () => {
         expect(nudger).not.toHaveBeenCalled();
     });
 
-    it("injects project memory only on the first transform for root sessions", async () => {
+    it("injects project memory inside session-history when compartments exist", async () => {
         //#given
-        useTempDataHome("context-transform-memory-first-pass-");
+        useTempDataHome("context-transform-memory-compartment-");
         const scheduler: Scheduler = { shouldExecute: mock(() => "defer" as const) };
         const db = openDatabase();
+        const projectPath = resolveProjectIdentity("/repo/project");
         insertMemory(db, {
-            projectPath: resolveProjectIdentity("/repo/project"),
+            projectPath,
             category: "USER_DIRECTIVES",
             content: "Always use Bun",
         });
+        replaceAllCompartments(db, "ses-memory", [
+            {
+                sequence: 0,
+                startMessage: 0,
+                endMessage: 0,
+                startMessageId: "",
+                endMessageId: "",
+                title: "Setup",
+                content: "Initial setup work.",
+            },
+        ]);
         const transform = createTransform({
             tagger: createTagger(),
             scheduler,
@@ -827,7 +839,7 @@ describe("createTransform", () => {
             directory: "/repo/project",
             memoryConfig: { enabled: true, injectionBudgetTokens: 500 },
         });
-        const firstPass: TestMessage[] = [
+        const messages: TestMessage[] = [
             {
                 info: { id: "m-user-1", role: "user", sessionID: "ses-memory" },
                 parts: [{ type: "text", text: "continue" }],
@@ -835,22 +847,14 @@ describe("createTransform", () => {
         ];
 
         //#when
-        await transform({}, { messages: firstPass });
+        await transform({}, { messages });
 
-        //#then
-        expect(text(firstPass[0]!, 0)).toContain("<project-memory>");
-        expect(text(firstPass[0]!, 0)).toContain("Always use Bun");
-
-        const secondPass: TestMessage[] = [
-            {
-                info: { id: "m-user-2", role: "user", sessionID: "ses-memory" },
-                parts: [{ type: "text", text: "continue again" }],
-            },
-        ];
-
-        await transform({}, { messages: secondPass });
-
-        expect(text(secondPass[0]!, 0)).not.toContain("<project-memory>");
+        //#then — memory block appears inside session-history alongside compartments
+        const injected = text(messages[0]!, 0);
+        expect(injected).toContain("<session-history>");
+        expect(injected).toContain("<project-memory>");
+        expect(injected).toContain("Always use Bun");
+        expect(injected).toContain('<compartment title="Setup">');
     });
 
     it("skips project memory injection for subagent sessions", async () => {
@@ -949,8 +953,8 @@ describe("createTransform", () => {
 
         await transform({}, { messages: secondPass });
 
+        expect(secondPass).toHaveLength(1);
         expect(text(secondPass[0], 0)).toBe("§1§ keep this");
-        expect(text(secondPass[1], 0)).toBe("[dropped §2§]");
         expect(getPendingOps(db, "ses-sub-drop")).toHaveLength(0);
     });
 
@@ -1125,9 +1129,9 @@ describe("createTransform", () => {
         //#when
         await transform({}, { messages: secondPass });
 
-        //#then — thinking part is stripped after being cleared; text part moves to index 0
-        expect(secondPass[1].parts).toHaveLength(1);
-        expect(text(secondPass[1], 0)).toBe("[dropped \u00a72\u00a7]");
+        //#then — thinking part is cleared; text becomes [dropped §2§]; entire message stripped
+        expect(secondPass).toHaveLength(1);
+        expect(text(secondPass[0], 0)).toContain("user prompt");
     });
 
     it("fails open when session meta lookup throws", async () => {
@@ -1607,7 +1611,8 @@ describe("createTransform protected tail", () => {
         await transform({}, { messages: secondPass });
 
         //#then
-        expect(text(secondPass[0], 0)).toBe("[dropped §1§]");
+        expect(secondPass).toHaveLength(1);
+        expect(text(secondPass[0], 0)).toContain("assistant");
         expect(getTagById(db, "ses-pt-pending", 1)?.status).toBe("dropped");
         expect(getPendingOps(db, "ses-pt-pending")).toHaveLength(0);
         expect(getOrCreateSessionMeta(db, "ses-pt-pending").compartmentInProgress).toBe(false);

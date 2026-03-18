@@ -1,8 +1,7 @@
 import { DEFAULT_COMPARTMENT_TOKEN_BUDGET } from "../../config/schema/magic-context";
-import { buildMemoryInjectionBlock } from "../../features/magic-context/memory";
 import { resolveProjectIdentity } from "../../features/magic-context/memory/project-identity";
 import type { Scheduler } from "../../features/magic-context/scheduler";
-import type { SidekickConfig, SidekickRunState } from "../../features/magic-context/sidekick";
+
 import {
     type ContextDatabase,
     getOrCreateSessionMeta,
@@ -61,56 +60,11 @@ export interface TransformDeps {
         enabled: boolean;
         injectionBudgetTokens: number;
     };
-    sidekickConfig?: SidekickConfig;
-    sidekickState?: SidekickRunState;
     compartmentTokenBudget?: number;
     historianTimeoutMs?: number;
     getNotificationParams?: (
         sessionId: string,
     ) => import("./send-session-notification").NotificationParams;
-}
-
-function findFirstTextPart(parts: unknown[]): { type: string; text: string } | null {
-    for (const part of parts) {
-        if (part === null || typeof part !== "object") continue;
-        const candidate = part as Record<string, unknown>;
-        if (candidate.type === "text" && typeof candidate.text === "string") {
-            return candidate as { type: string; text: string };
-        }
-    }
-
-    return null;
-}
-
-function findFirstUserText(messages: MessageLike[]): string | null {
-    for (const message of messages) {
-        if (message.info.role !== "user") {
-            continue;
-        }
-
-        return findFirstTextPart(message.parts)?.text ?? null;
-    }
-
-    return null;
-}
-
-function isDroppedPlaceholder(text: string): boolean {
-    return /^\[dropped §\d+§\]$/.test(text.trim());
-}
-
-function renderMemoryInjection(sessionId: string, messages: MessageLike[], block: string): void {
-    const firstMessage = messages[0];
-    const textPart = firstMessage ? findFirstTextPart(firstMessage.parts) : null;
-
-    if (!firstMessage || !textPart || isDroppedPlaceholder(textPart.text)) {
-        messages.unshift({
-            info: { role: "user", sessionID: sessionId },
-            parts: [{ type: "text", text: block }],
-        });
-        return;
-    }
-
-    textPart.text = `${block}\n\n${textPart.text}`;
 }
 
 export function createTransform(deps: TransformDeps) {
@@ -148,26 +102,17 @@ export function createTransform(deps: TransformDeps) {
         const canRunCompartments =
             fullFeatureMode && deps.client !== undefined && compartmentDirectory.length > 0;
 
-        if (fullFeatureMode && deps.memoryConfig?.enabled && sessionMeta.counter === 0) {
-            const firstUserText = findFirstUserText(messages);
-            const injectionBlock = await buildMemoryInjectionBlock(
-                db,
-                resolveProjectIdentity(deps.directory ?? process.cwd()),
-                deps.memoryConfig.injectionBudgetTokens,
-                deps.sidekickConfig,
-                deps.sidekickState,
-                sessionId,
-                firstUserText ?? undefined,
-            );
-            if (injectionBlock) {
-                renderMemoryInjection(sessionId, messages, injectionBlock);
-                log(`[magic-context] injected memory block (${injectionBlock.length} chars)`);
-            }
-        }
-
         let pendingCompartmentInjection: PreparedCompartmentInjection | null = null;
         if (fullFeatureMode) {
-            pendingCompartmentInjection = prepareCompartmentInjection(db, sessionId, messages);
+            const projectPath = deps.memoryConfig?.enabled
+                ? resolveProjectIdentity(deps.directory ?? process.cwd())
+                : undefined;
+            pendingCompartmentInjection = prepareCompartmentInjection(
+                db,
+                sessionId,
+                messages,
+                projectPath,
+            );
         }
 
         let targets = new Map<number, { setContent: (content: string) => boolean }>();

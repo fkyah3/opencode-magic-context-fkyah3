@@ -51,7 +51,7 @@ function getLoadAllEmbeddingsStatement(db: Database): PreparedStatement {
     let stmt = loadAllEmbeddingsStatements.get(db);
     if (!stmt) {
         stmt = db.prepare(
-            "SELECT memory_embeddings.memory_id AS memoryId, memory_embeddings.embedding AS embedding FROM memory_embeddings INNER JOIN memories ON memories.id = memory_embeddings.memory_id WHERE memories.project_path IN (?, '__global__') ORDER BY memory_embeddings.memory_id ASC",
+            "SELECT memory_embeddings.memory_id AS memoryId, memory_embeddings.embedding AS embedding FROM memory_embeddings INNER JOIN memories ON memories.id = memory_embeddings.memory_id WHERE memories.project_path = ? ORDER BY memory_embeddings.memory_id ASC",
         );
         loadAllEmbeddingsStatements.set(db, stmt);
     }

@@ -19,6 +19,7 @@ import { createCtxMemoryTools } from "../tools/ctx-memory";
 import { createCtxNoteTools } from "../tools/ctx-note";
 import { createCtxRecallTools } from "../tools/ctx-recall";
 import { createCtxReduceTools } from "../tools/ctx-reduce";
+import { normalizeToolArgSchemas } from "./normalize-tool-arg-schemas";
 import type { PluginContext } from "./types";
 
 export function createToolRegistry(args: {
@@ -61,7 +62,7 @@ export function createToolRegistry(args: {
         }
     }
 
-    return {
+    const allTools: Record<string, ToolDefinition> = {
         ...createCtxReduceTools({
             db,
             protectedTags: pluginConfig.protected_tags ?? DEFAULT_PROTECTED_TAGS,
@@ -83,4 +84,12 @@ export function createToolRegistry(args: {
               }
             : {}),
     };
+
+    // Patch arg schemas so property-level .describe() text survives JSON Schema serialization.
+    // Without this, the LLM sees bare types with no description for each parameter.
+    for (const toolDefinition of Object.values(allTools)) {
+        normalizeToolArgSchemas(toolDefinition);
+    }
+
+    return allTools;
 }

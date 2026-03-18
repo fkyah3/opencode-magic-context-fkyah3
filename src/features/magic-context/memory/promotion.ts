@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { log } from "../../../shared/logger";
-import { CATEGORY_DEFAULT_SCOPE, CATEGORY_DEFAULT_TTL, PROMOTABLE_CATEGORIES } from "./constants";
+import { CATEGORY_DEFAULT_TTL, PROMOTABLE_CATEGORIES } from "./constants";
 import { embedText, getEmbeddingModelId } from "./embedding";
 import { computeNormalizedHash } from "./normalize-hash";
 import { getMemoryByHash, insertMemory, updateMemorySeenCount } from "./storage-memory";
@@ -12,14 +12,8 @@ interface SessionFact {
     content: string;
 }
 
-const GLOBAL_MEMORY_PROJECT_PATH = "__global__";
-
 function isPromotableCategory(category: string): category is MemoryCategory {
     return PROMOTABLE_CATEGORIES.some((promotableCategory) => promotableCategory === category);
-}
-
-function resolveMemoryProjectPath(category: MemoryCategory, projectPath: string): string {
-    return CATEGORY_DEFAULT_SCOPE[category] === "global" ? GLOBAL_MEMORY_PROJECT_PATH : projectPath;
 }
 
 function resolveExpiresAt(category: MemoryCategory): number | null {
@@ -45,13 +39,7 @@ export function promoteSessionFactsToMemory(
             }
 
             const normalizedHash = computeNormalizedHash(fact.content);
-            const memoryProjectPath = resolveMemoryProjectPath(fact.category, projectPath);
-            const existingMemory = getMemoryByHash(
-                db,
-                memoryProjectPath,
-                fact.category,
-                normalizedHash,
-            );
+            const existingMemory = getMemoryByHash(db, projectPath, fact.category, normalizedHash);
 
             if (existingMemory) {
                 updateMemorySeenCount(db, existingMemory.id);
@@ -59,7 +47,7 @@ export function promoteSessionFactsToMemory(
             }
 
             const memoryInput: MemoryInput = {
-                projectPath: memoryProjectPath,
+                projectPath,
                 category: fact.category,
                 content: fact.content,
                 sourceSessionId: sessionId,

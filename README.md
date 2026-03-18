@@ -1,15 +1,10 @@
 # Magic Context
 
-Intelligent context management for OpenCode. Magic Context gives your AI agent the tools to stay within token limits gracefully, without losing track of what matters.
+Your AI coding agent forgets everything the moment a conversation gets long enough. Context windows fill up, old messages get dropped, and the agent loses track of decisions it made twenty minutes ago. Magic Context fixes this.
 
----
+It's an [OpenCode](https://github.com/anomalyco/opencode) plugin that runs a background historian — a separate, lightweight model that compresses older conversation into structured summaries and durable facts while the main agent keeps working. The agent never stops to summarize its own history. It never notices the rewriting happening beneath it. And because every mutation is cache-aware, nothing gets invalidated until the provider's cached prefix expires, so you're not paying to throw away work that's already cached.
 
-## What it does
-
-- **Tags every message and tool output** with `§N§` identifiers the agent can reference when reducing context
-- **Defers context mutations** until cached prefixes are stale, so you don't pay to invalidate what you already cached
-- **Summarizes session history** via an asynchronous historian agent that extracts facts, decisions, and structured compartments from older conversation history
-- **Persists memory across sessions** using semantic + full-text search so facts, architecture decisions, and constraints survive conversation resets
+Across sessions, architecture decisions, constraints, and preferences persist in a cross-session memory system. A new conversation starts with everything the previous one learned, without replaying old transcripts.
 
 ---
 
@@ -19,7 +14,7 @@ Intelligent context management for OpenCode. Magic Context gives your AI agent t
 npm install @cortexkit/magic-context-opencode
 ```
 
-Then add the plugin to your OpenCode config (`opencode.json` or `opencode.jsonc`):
+Add it to your OpenCode config (`opencode.json` or `opencode.jsonc`):
 
 ```jsonc
 {
@@ -27,17 +22,28 @@ Then add the plugin to your OpenCode config (`opencode.json` or `opencode.jsonc`
 }
 ```
 
+Magic Context replaces OpenCode's built-in compaction — the two cannot run together:
+
+```jsonc
+{
+  "compaction": {
+    "auto": false,
+    "prune": false
+  }
+}
+```
+
 ---
 
 ## Quick Start
 
-Create a `magic-context.jsonc` in your project root (or in `.opencode/magic-context.jsonc` for project-scoped config):
+Create `magic-context.jsonc` in your project root (or `.opencode/magic-context.jsonc`):
 
 ```jsonc
 {
   "enabled": true,
 
-  // Optional: configure which model historian uses
+  // Optional: which model the historian uses
   "historian": {
     "model": "anthropic/claude-haiku-4",
     "fallback_models": ["anthropic/claude-3-5-haiku"]
@@ -45,128 +51,151 @@ Create a `magic-context.jsonc` in your project root (or in `.opencode/magic-cont
 }
 ```
 
-That's enough to get going. All other options have sensible defaults.
+That's it. Everything else has sensible defaults. For user-wide settings, put the config at `~/.config/opencode/magic-context.jsonc` — project config merges on top.
 
-For user-wide settings, put the config at `~/.config/opencode/magic-context.jsonc`. Project config merges on top of user config.
+---
 
-> **Note:** Magic Context disables itself automatically if OpenCode's built-in auto-compaction is enabled for the project. The two features conflict — only one should run at a time.
+## What Your Agent Gets
+
+Magic Context gives the agent four tools and injects structured context automatically. Here's what each tool is for in practice.
+
+### `ctx_reduce` — Shed weight
+
+After a tool-heavy turn (large grep results, file reads, bash output), the agent calls `ctx_reduce` to mark stale content for removal. Drops aren't applied immediately — they're queued until the cache expires or context pressure forces it. This means the agent can drop freely without worrying about cache invalidation timing.
+
+```
+ctx_reduce(drop="3-5,12")     // Drop tags 3, 4, 5, and 12
+```
+
+Recent tags (last 5 by default) are protected. Drops targeting them stay queued until they age out.
+
+### `ctx_note` — Scratch notes that survive compression
+
+Session notes are the agent's scratchpad for durable goals, constraints, and reminders. The historian reads these notes during compression, deduplicates them, and carries them forward — so a note written early in a session survives even after the raw history around it gets replaced by compartments.
+
+```
+ctx_note(action="write", content="Always run tests before committing on this repo.")
+ctx_note(action="read")
+```
+
+### `ctx_memory` — Persistent cross-session knowledge
+
+Architecture decisions, naming conventions, user preferences — anything that should survive across conversations. Memories are categorized and can be scoped to a project or shared globally. The historian automatically promotes qualifying session facts to memories, but the agent can also write them explicitly.
+
+```
+ctx_memory(action="write", category="ARCHITECTURE_DECISIONS", content="Event sourcing for the orders domain.")
+ctx_memory(action="list")
+ctx_memory(action="delete", id=42)
+ctx_memory(action="promote", id=7)     // Pin as permanent
+```
+
+### `ctx_recall` — Search past knowledge
+
+Semantic search over the memory store. Results are ranked by a blend of embedding similarity and full-text matching. Use this when the agent needs to find a decision or preference from a previous session.
+
+```
+ctx_recall(query="authentication approach", category="CONSTRAINTS")
+```
+
+### Automatic context injection
+
+Every turn, Magic Context injects a `<session-history>` block into the conversation containing:
+
+- **Project memories** — cross-session decisions, constraints, and preferences
+- **Compartments** — structured summaries replacing older raw history
+- **Session facts** — durable categorized facts from the current session
+- **Session notes** — maintained `ctx_note` content
+
+This block is stable between historian runs. When the agent writes new memories via `ctx_memory`, the write is persisted to the database immediately but the injected block doesn't change until the next historian run — so writes never bust the cache mid-conversation.
 
 ---
 
 ## How It Works
 
-### 1. Tagging
+### Tagging
 
-Every response causes all messages, file attachments, and tool outputs to get tagged with monotonically increasing `§N§` identifiers. The agent sees these tags inline and uses them to reference specific content when reducing.
+Every message, tool output, and file attachment gets a monotonically increasing `§N§` tag. The agent sees these inline and uses them to reference specific content when calling `ctx_reduce`. Tags persist in the database and resume across restarts.
 
-Tags persist in the database. If you restart a session, previously assigned tags are restored from storage and tagging resumes from where it left off.
+### Queued reductions
 
-### 2. Queueing reduction operations
+When the agent calls `ctx_reduce`, drops go into a pending queue — not applied immediately. Two conditions trigger execution:
 
-The agent calls `ctx_reduce` to request drops. These operations are **not applied immediately**. They go into a pending queue. This is intentional: mutating the conversation too early invalidates cached prefixes and wastes money. The system waits for the right moment.
+- **Cache expired** — enough time has passed that the cached prefix is likely stale (configurable, default 5 minutes)
+- **Threshold reached** — context usage hits `execute_threshold_percentage` (default 65%), at which point waiting risks running out of space
 
-If the agent targets still-protected recent tags, those drops stay queued as deferred intents until the tags age out of the protected tail.
+Between those triggers, the conversation continues unchanged. The agent doesn't need to think about timing.
 
-### 3. Historian pipeline
+### Background historian
 
-When queued drops alone can't buy enough headroom, Magic Context starts the historian subagent on an older eligible prefix of raw session history. Historian produces:
+When local drops aren't buying enough headroom, Magic Context starts a historian — a separate lightweight model that reads an eligible prefix of raw history and produces:
 
-- **compartments** — larger chronological blocks that replace older raw history
-- **facts** — durable decisions, constraints, and preferences
-- **session notes** — rewritten and deduplicated `ctx_note` content
+- **Compartments** — chronological blocks that replace older raw messages
+- **Facts** — durable decisions, constraints, and preferences (categorized)
+- **Notes** — rewritten and deduplicated `ctx_note` content
 
-That structured state is stored in the database and injected back into later transforms so the session retains important long-term context without replaying the full old transcript.
+The historian runs asynchronously. The main agent never waits for it. When the historian finishes, its output is materialized into the conversation on the next transform pass.
 
-### 4. The scheduler
+### Nudging
 
-Two conditions trigger execution of pending operations:
+As context usage grows, Magic Context sends rolling reminders to the agent suggesting it reduce. Reminder cadence tightens as usage approaches the threshold. If the agent has recently called `ctx_reduce`, reminders are suppressed — it already knows. An emergency nudge at 80% always fires regardless of cooldown.
 
-- **Cache expired** — enough time has passed since the last response that the cached prefix is likely stale (default: 5 minutes)
-- **Execute threshold** — context usage has reached `execute_threshold_percentage` (default: 65%). At that point, waiting risks running out of space, so queued drops apply immediately regardless of cache state
+### Cross-session memory
 
-If neither condition is met, operations stay queued and the conversation continues unchanged. At higher emergency bands, the transform can also materialize finished historian output and force aggressive cleanup to protect the session.
+After each historian run, qualifying facts are promoted to the persistent memory store. On every subsequent turn, active memories are injected alongside compartments in the `<session-history>` block. When a new session starts, it inherits all project and global memories from previous sessions.
 
-### 5. Transform pipeline
-
-On every message transform (before the conversation is sent to the model), the system:
-
-1. Assigns new tags to messages that don't have them yet
-2. Applies already-flushed operations
-3. Checks whether the scheduler says it's time to flush pending operations
-4. If yes, applies pending drops that are no longer protected and marks them applied
-5. Injects stored historian state for older covered history
-6. Starts or materializes historian work when sustained pressure shows local drops aren't enough
-7. Injects nudge messages or sticky reminders when context usage is above threshold
-
-### 6. Nudger
-
-Magic Context uses rolling token-based nudges rather than fixed percentage bands. As usage approaches the configured execute threshold, reminder cadence tightens. Regular assistant nudges are throttled after a real `ctx_reduce` call, while the emergency nudge at 80% still fires even during cooldown.
-
-There's also a sticky end-of-turn reminder for tool-heavy turns, so agents get one more chance to clean up fresh tool output before the next request grows the session further.
-
-### 7. Compaction handling
-
-When OpenCode compacts a session, all existing tags are marked as compacted, pending operations are cleared, and nudge counters reset. Magic Context then starts fresh for the post-compaction conversation.
+Memories are searchable via `ctx_recall` using semantic embeddings (local by default) with full-text search as a fallback.
 
 ---
 
 ## Cache Awareness
 
-This is the central insight of the feature.
+LLM providers cache conversation prefixes server-side. The cache window depends on your provider and subscription tier — Claude Pro offers 5 minutes, Max offers 1 hour, and pricing for cached vs. uncached tokens differs between API and subscription usage.
 
-Anthropic (and other providers) cache conversation prefixes. When you send a request, a prefix of the conversation is cached server-side for a short window. If the same prefix arrives in the next request, the provider can reuse the cached computation instead of processing it again. That saves money and reduces latency.
-
-If you mutate the conversation mid-window (by dropping or summarizing messages), you change the prefix, invalidate the cache, and throw away those savings. Magic Context avoids this by deferring mutations until the cache is stale.
-
-The default `cache_ttl` of `"5m"` works well for most sessions. You can tune it:
+Magic Context defers all mutations until the cached prefix expires. The default `cache_ttl` of `"5m"` matches most providers. You can tune it:
 
 ```jsonc
 {
-  "enabled": true,
   "cache_ttl": "5m"
 }
 ```
 
-Per-model overrides:
+Per-model overrides for mixed-model workflows:
 
 ```jsonc
 {
-  "enabled": true,
   "cache_ttl": {
     "default": "5m",
-    "anthropic/claude-opus-4-5": "10m"
+    "anthropic/claude-opus-4-6": "60m"
   }
 }
 ```
 
-Supported formats: `"5m"` (minutes), `"30s"` (seconds), `"1h"` (hours).
-
-Higher-tier models with longer cache windows benefit from a longer TTL. Setting it too low wastes cache hits. Setting it too high delays reduction on long sessions.
+Supported formats: `"30s"`, `"5m"`, `"1h"`.
 
 ---
 
 ## Configuration Reference
 
-All settings are flat top-level keys in `magic-context.jsonc`. There is no nesting under `magic_context` or similar.
+All settings are flat top-level keys in `magic-context.jsonc`.
 
-### Core options
+### Core
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enabled` | `boolean` | `false` | Master toggle. Must be `true` to activate. |
-| `cache_ttl` | `string` or `object` | `"5m"` | Wait time after a response before applying pending ops. String or per-model object. |
-| `protected_tags` | `number` (1-20) | `5` | Last N active tags immune from immediate dropping. |
-| `nudge_interval_tokens` | `number` | `10000` | Minimum token growth between low-priority rolling nudges. |
-| `execute_threshold_percentage` | `number` (35-95) or `object` | `65` | Context percentage that forces queued ops to execute. Supports per-model object. |
-| `auto_drop_tool_age` | `number` | `100` | Auto-drop tool outputs older than N tags during queue execution. |
-| `clear_reasoning_age` | `number` | `50` | Clear reasoning/thinking blocks older than N tags. |
-| `iteration_nudge_threshold` | `number` | `15` | Consecutive assistant messages without user input before an iteration nudge fires. |
-| `compartment_token_budget` | `number` | `20000` | Token budget used when building historian input chunks. |
-| `historian_timeout_ms` | `number` | `300000` | Timeout per historian prompt call in milliseconds. |
+| `enabled` | `boolean` | `false` | Master toggle. |
+| `cache_ttl` | `string` or `object` | `"5m"` | Time after a response before applying pending ops. String or per-model map. |
+| `protected_tags` | `number` (1–20) | `5` | Last N active tags immune from immediate dropping. |
+| `nudge_interval_tokens` | `number` | `10000` | Minimum token growth between rolling nudges. |
+| `execute_threshold_percentage` | `number` (35–95) or `object` | `65` | Context usage that forces queued ops to execute. Supports per-model map. |
+| `auto_drop_tool_age` | `number` | `100` | Auto-drop tool outputs older than N tags during execution. |
+| `clear_reasoning_age` | `number` | `50` | Clear thinking/reasoning blocks older than N tags. |
+| `iteration_nudge_threshold` | `number` | `15` | Consecutive assistant turns without user input before an iteration nudge. |
+| `compartment_token_budget` | `number` | `20000` | Token budget for historian input chunks. |
+| `historian_timeout_ms` | `number` | `300000` | Timeout per historian call (ms). |
 
 ### `historian`
 
-Configures the historian subagent. Optional — the plugin has a built-in default chain.
+Configures the background historian. Optional — the plugin has a built-in default chain.
 
 ```jsonc
 {
@@ -181,25 +210,23 @@ Configures the historian subagent. Optional — the plugin has a built-in defaul
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `model` | `string` | Primary model for historian runs. |
-| `fallback_models` | `string` or `string[]` | Models to try if the primary is rate-limited or fails. |
-| `temperature` | `number` (0-2) | Sampling temperature. |
-| `maxTokens` | `number` | Max tokens per historian response. |
-| `variant` | `string` | Agent variant to use. |
+| `model` | `string` | Primary model. |
+| `fallback_models` | `string` or `string[]` | Models to try if the primary fails or is rate-limited. |
+| `temperature` | `number` (0–2) | Sampling temperature. |
+| `maxTokens` | `number` | Max tokens per response. |
+| `variant` | `string` | Agent variant. |
 | `prompt` | `string` | Custom system prompt override. |
 
 ### `embedding`
 
-Controls how memories are embedded for semantic search.
+Controls semantic search for cross-session memories.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `provider` | `"local"` \| `"openai-compatible"` \| `"off"` | `"local"` | Embedding backend. `"local"` runs `Xenova/all-MiniLM-L6-v2` in-process via HuggingFace Transformers.js. |
-| `model` | `string` | `"Xenova/all-MiniLM-L6-v2"` | Model to use. Only relevant for `"local"` and `"openai-compatible"`. |
-| `endpoint` | `string` | | Required when `provider` is `"openai-compatible"`. OpenAI-compatible embeddings endpoint. |
-| `api_key` | `string` | | Optional API key for `"openai-compatible"`. |
-
-Example using an external embedding service:
+| `provider` | `"local"` \| `"openai-compatible"` \| `"off"` | `"local"` | `"local"` runs `Xenova/all-MiniLM-L6-v2` in-process. |
+| `model` | `string` | `"Xenova/all-MiniLM-L6-v2"` | Embedding model. |
+| `endpoint` | `string` | — | Required for `"openai-compatible"`. |
+| `api_key` | `string` | — | Optional API key for remote endpoints. |
 
 ```jsonc
 {
@@ -214,44 +241,44 @@ Example using an external embedding service:
 
 ### `memory`
 
-Cross-session memory settings. Memories persist across conversations and are injected at session start.
+Cross-session memory settings.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `boolean` | `true` | Enable cross-session memory. |
-| `injection_budget_tokens` | `number` (500-20000) | `4000` | Token budget for memory injection at session start. |
-| `auto_promote` | `boolean` | `true` | Automatically promote eligible session facts to memory. |
-| `retrieval_count_promotion_threshold` | `number` | `3` | How many times a memory must be retrieved before auto-promotion to permanent status. |
+| `injection_budget_tokens` | `number` (500–20000) | `4000` | Token budget for memory injection. |
+| `auto_promote` | `boolean` | `true` | Promote eligible session facts to memory automatically. |
+| `retrieval_count_promotion_threshold` | `number` | `3` | Retrievals needed before a memory is auto-promoted to permanent. |
 
 ### `sidekick`
 
-An optional lightweight local agent that retrieves relevant memories at session start. Runs against a local LLM endpoint. Disabled by default.
+Optional lightweight local agent for memory retrieval augmentation. Disabled by default.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `boolean` | `false` | Enable sidekick. |
-| `endpoint` | `string` | `"http://localhost:1234/v1"` | OpenAI-compatible endpoint for the sidekick model. |
-| `model` | `string` | `"qwen3.5-9b"` | Model to use for sidekick queries. |
-| `api_key` | `string` | `""` | API key if the endpoint requires one. |
-| `max_tool_calls` | `number` | `3` | Maximum tool calls the sidekick can make per retrieval run. |
-| `timeout_ms` | `number` | `30000` | Timeout per sidekick run in milliseconds. |
-| `system_prompt` | `string` | | Optional custom system prompt override. |
+| `endpoint` | `string` | `"http://localhost:1234/v1"` | OpenAI-compatible endpoint. |
+| `model` | `string` | `"qwen3.5-9b"` | Model for sidekick queries. |
+| `api_key` | `string` | `""` | API key if needed. |
+| `max_tool_calls` | `number` | `3` | Max tool calls per retrieval. |
+| `timeout_ms` | `number` | `30000` | Timeout per run (ms). |
+| `system_prompt` | `string` | — | Custom system prompt override. |
 
 ### `dreaming`
 
-Background memory maintenance tasks that run on a schedule (typically overnight). Requires a local LLM endpoint.
+Background memory maintenance on a schedule (typically overnight). Requires a local LLM.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `boolean` | `false` | Enable dreaming. |
-| `schedule` | `string` | `"02:00-06:00"` | Time window for dreaming runs (24h format). |
-| `max_runtime_minutes` | `number` | `120` | Maximum total runtime per dreaming session. |
-| `endpoint` | `string` | `"http://localhost:1234/v1"` | OpenAI-compatible endpoint for the dreaming model. |
-| `model` | `string` | `"qwen3.5-32b"` | Model to use during dreaming. |
-| `api_key` | `string` | `""` | API key if the endpoint requires one. |
-| `tasks` | `array` | `["decay", "consolidate"]` | Which tasks to run. Options: `"decay"`, `"consolidate"`, `"mine"`, `"verify"`, `"git"`, `"map"`. |
+| `schedule` | `string` | `"02:00-06:00"` | Time window (24h format). |
+| `max_runtime_minutes` | `number` | `120` | Max runtime per session. |
+| `endpoint` | `string` | `"http://localhost:1234/v1"` | OpenAI-compatible endpoint. |
+| `model` | `string` | `"qwen3.5-32b"` | Model for dreaming tasks. |
+| `api_key` | `string` | `""` | API key if needed. |
+| `tasks` | `array` | `["decay", "consolidate"]` | Tasks to run: `"decay"`, `"consolidate"`, `"mine"`, `"verify"`, `"git"`, `"map"`. |
 
-Full example config:
+### Full example
 
 ```jsonc
 {
@@ -259,8 +286,6 @@ Full example config:
   "cache_ttl": "5m",
   "protected_tags": 5,
   "execute_threshold_percentage": 65,
-  "auto_drop_tool_age": 100,
-  "clear_reasoning_age": 50,
 
   "historian": {
     "model": "anthropic/claude-haiku-4",
@@ -288,138 +313,44 @@ Full example config:
 
 ---
 
-## Tools
-
-Magic Context exposes four tools to the agent.
-
-### `ctx_reduce`
-
-Queues drop operations on tagged content. Drops are applied at the optimal time (when the cache is stale or threshold is hit), not immediately.
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `drop` | `string` | Yes | Tag IDs to remove entirely. Accepts range syntax. |
-
-**Range syntax:**
-
-| Format | Example | Meaning |
-|--------|---------|---------|
-| Single | `"5"` | Tag 5 only |
-| List | `"1,2,9"` | Tags 1, 2, and 9 |
-| Range | `"3-5"` | Tags 3, 4, and 5 |
-| Mixed | `"1-5,8"` | Tags 1 through 5, plus 8 |
-
-The last N active tags (default: 5) are protected from immediate execution. If you target them, the drop stays queued until they age out of the protected tail.
-
-```
-ctx_reduce(drop="1-10,15")
-```
-
-### `ctx_note`
-
-Saves or inspects durable session notes. Historian reads these notes, deduplicates them, and rewrites them over time. Use this for goals, constraints, decisions, and workflow reminders you want to survive context squashing.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `action` | `"write"` \| `"read"` \| `"clear"` | Defaults to `"write"` when content is provided, otherwise `"read"`. |
-| `content` | `string` | Note text. Required when action is `"write"`. |
-
-```
-ctx_note(action="write", content="Use the feat->integrate cherry-pick flow for all magic-context work.")
-```
-
-### `ctx_recall`
-
-Searches cross-session project memories using natural language. Returns results ranked by a combination of semantic similarity and full-text search (70/30 weighted blend when both sources are available).
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | `string` | Yes | Natural language search query. |
-| `category` | `string` | No | Filter results to a specific category. |
-| `limit` | `number` | No | Max results to return (default: 10). |
-
-```
-ctx_recall(query="authentication approach", category="ARCHITECTURE_DECISIONS")
-```
-
-### `ctx_memory`
-
-Manages cross-session project memories. Memories persist across sessions and are automatically injected at session start.
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `action` | `"write"` \| `"delete"` \| `"promote"` \| `"list"` | Yes | Action to perform. |
-| `content` | `string` | For write | Memory content. |
-| `category` | `string` | For write | Memory category. |
-| `id` | `number` | For delete/promote | Memory ID from a previous `list`. |
-| `scope` | `"project"` \| `"global"` | No | `"project"` scopes to the current project (default). `"global"` is available across all projects. |
-
-```
-ctx_memory(action="write", category="ARCHITECTURE_DECISIONS", content="We use event sourcing for the orders domain.")
-ctx_memory(action="list")
-ctx_memory(action="promote", id=42)
-```
-
----
-
 ## Commands
 
 ### `/ctx-status`
 
-Shows debug information about the current session:
-
-- Total tag count and next tag index
-- Pending drop queue and protected-tail deferrals
-- Cache TTL remaining until next scheduled flush
-- Nudge state and current context usage percentage
-- Historian progress, compartment coverage, and failure info
-- Last transform error (if any)
-
-Run this when drops seem stuck or historian work isn't progressing.
+Debug view of the current session: tag counts, pending drops, cache TTL, nudge state, historian progress, compartment coverage, and the last transform error. Run this when something seems stuck.
 
 ### `/ctx-flush`
 
-Forces queued drops and cleanup to apply immediately, bypassing the scheduler's cache TTL check.
-
-Use this when you want cleanup to happen right now regardless of cache state. After flushing, the command reports what was released, skipped, or still deferred because it remains protected.
+Forces all queued operations to apply immediately, bypassing cache TTL. Reports what was released, skipped, or still deferred.
 
 ### `/ctx-recomp`
 
-Rebuilds compartments, facts, and maintained notes from raw session history in memory, then publishes the rebuilt state atomically if validation succeeds.
-
-Use this when stored historian state seems stale or structurally wrong and you want a manual rebuild from source history.
+Rebuilds compartments, facts, and notes from raw session history. Use when stored historian state seems stale or structurally wrong.
 
 ---
 
 ## Storage
 
-Magic Context stores all state in a local SQLite database:
+All state lives in a local SQLite database:
 
 ```
 ~/.local/share/opencode/storage/plugin/magic-context/context.db
 ```
 
-If that database can't be created or opened, Magic Context disables itself and warns the user. It does **not** fall back to in-memory state. This fail-closed behavior prevents resumed sessions from unexpectedly replaying an oversized raw transcript.
+If the database can't be opened, Magic Context disables itself.
 
-The database runs in WAL (write-ahead log) journal mode for safe concurrent access.
-
-| Table | Contents |
-|-------|----------|
-| `tags` | Tag assignments: message ID, tag number, session ID, status |
-| `pending_ops` | Queued drop operations with status tracking |
-| `source_contents` | Raw content snapshots used during reduction |
+| Table | Purpose |
+|-------|---------|
+| `tags` | Tag assignments — message ID, tag number, session, status |
+| `pending_ops` | Queued drop operations with execution status |
+| `source_contents` | Raw content snapshots for reduction |
 | `compartments` | Historian-produced structured history blocks |
-| `session_facts` | Durable categorized facts preserved across squashes |
-| `session_notes` | Maintained session-scoped notes from `ctx_note` |
-| `session_meta` | Per-session state: context percentage, last response time, nudge flags |
+| `session_facts` | Categorized durable facts from historian runs |
+| `session_notes` | Maintained `ctx_note` content |
+| `session_meta` | Per-session state — usage, nudge flags, anchors |
+| `memories` | Cross-session persistent memories |
+| `memory_embeddings` | Embedding vectors for semantic search |
+| `dream_state` | Dreamer scheduling, lease, and task progress |
 
 ---
 
@@ -432,52 +363,22 @@ The database runs in WAL (write-ahead log) journal mode for safe concurrent acce
 ### Scripts
 
 ```sh
-# Build the plugin
-bun run build
-
-# Type-check without emitting
-bun run typecheck
-
-# Run tests
-bun test
-
-# Lint
-bun run lint
-
-# Lint and auto-fix
-bun run lint:fix
-
-# Format
-bun run format
+bun run build          # Build the plugin
+bun run typecheck      # Type-check without emitting
+bun test               # Run tests
+bun run lint           # Lint
+bun run lint:fix       # Lint with auto-fix
+bun run format         # Format
 ```
 
 ### Utility scripts
 
 ```sh
-# Tail the plugin's structured log output
-bun scripts/tail-view.ts
-
-# Dump the contents of the context database for a session
-bun scripts/context-dump.ts
-
-# Trigger a dreaming run manually (outside the schedule window)
-bun scripts/dream.ts
-
-# Backfill embeddings for existing memories that don't have them yet
-bun scripts/backfill-embeddings.ts
+bun scripts/tail-view.ts             # Tail structured log output
+bun scripts/context-dump.ts          # Dump context DB for a session
+bun scripts/dream.ts                 # Trigger dreaming manually
+bun scripts/backfill-embeddings.ts   # Backfill missing embeddings
 ```
-
-### Tips
-
-**Keep historian fast.** Historian runs asynchronously but a slow model still delays when older history gets squashed into compartments. A lightweight primary model with a short fallback chain is the best tradeoff.
-
-**Drop tool outputs aggressively.** Tool outputs (bash results, grep output, file reads) are typically the largest context consumers and can't be summarized. Once you've acted on them, they're safe to drop.
-
-**Use `ctx_note` for durable guidance.** Put stable goals, constraints, preferences, and workflow rules into `ctx_note` instead of relying on them to survive in raw conversation history.
-
-**Check `/ctx-status` before debugging.** If drops aren't releasing or historian looks stuck, the status view shows pending ops, protected-tail state, historian progress, and the last transform error.
-
-**Configure `historian.fallback_models` for long sessions.** If your primary historian model gets rate-limited, a fallback keeps summaries generating without interruption.
 
 ---
 

@@ -1,6 +1,39 @@
 import { isRecord } from "../../shared/record-type-guard";
 import type { MessageLike, ThinkingLikePart } from "./tag-messages";
 
+const DROPPED_PLACEHOLDER_PATTERN = /^\[dropped §\d+§\]$/;
+
+/**
+ * Remove messages that consist entirely of [dropped §N§] placeholders.
+ * These are leftover shells after ctx_reduce drops their content — keeping them
+ * wastes tokens without providing any value since there is no recall mechanism.
+ */
+export function stripDroppedPlaceholderMessages(messages: MessageLike[]): number {
+    let stripped = 0;
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (msg.parts.length === 0) continue;
+
+        const allDropped = msg.parts.every((part) => {
+            if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") {
+                return false;
+            }
+            // A message may contain multiple dropped placeholders, e.g. "[dropped §1§][dropped §2§]"
+            const trimmed = part.text.trim();
+            if (trimmed.length === 0) return true;
+            return trimmed
+                .split(/(?=\[dropped §)/)
+                .every((segment) => DROPPED_PLACEHOLDER_PATTERN.test(segment.trim()));
+        });
+
+        if (allDropped) {
+            messages.splice(i, 1);
+            stripped++;
+        }
+    }
+    return stripped;
+}
+
 export function clearOldReasoning(
     messages: MessageLike[],
     reasoningByMessage: Map<MessageLike, ThinkingLikePart[]>,
