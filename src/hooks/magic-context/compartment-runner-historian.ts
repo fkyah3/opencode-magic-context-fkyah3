@@ -17,6 +17,9 @@ import {
     validateHistorianOutput,
 } from "./compartment-runner-validation";
 
+// Intentionally kept: historian validation failure dumps are preserved for debugging.
+// These are written to /tmp and survive until manual cleanup or OS temp pruning.
+// The user has explicitly requested keeping these dumps for now (see audit #21).
 const HISTORIAN_RESPONSE_DUMP_DIR = join(tmpdir(), "magic-context-historian");
 
 export async function runValidatedHistorianPass(args: {

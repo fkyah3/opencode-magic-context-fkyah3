@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, it } from "bun:test";
 import {
     archiveMemory,
-    clearAllEmbeddings,
+    clearEmbeddingsForProject,
     deleteEmbedding,
     deleteMemory,
     getMemoriesByProject,
@@ -267,7 +267,7 @@ describe("storage-memory", () => {
 
             expect(Array.from(embeddings.keys())).toEqual([memoryA.id]);
             expect(Array.from(embeddings.get(memoryA.id) ?? [])).toEqual([0.25, 0.5, 0.75]);
-            expect(getStoredModelId(db)).toBe("local:model-a");
+            expect(getStoredModelId(db, "/repo/project")).toBe("local:model-a");
 
             deleteEmbedding(db, memoryA.id);
 
@@ -284,10 +284,34 @@ describe("storage-memory", () => {
 
             saveEmbedding(db, memory.id, new Float32Array([0.25, 0.5, 0.75]), "local:model-b");
 
-            clearAllEmbeddings(db);
+            clearEmbeddingsForProject(db, "/repo/project");
 
             expect(loadAllEmbeddings(db, "/repo/project")).toEqual(new Map());
-            expect(getStoredModelId(db)).toBeNull();
+            expect(getStoredModelId(db, "/repo/project")).toBeNull();
+        });
+
+        it("#when clearing embeddings for one project #then other projects' embeddings are preserved", () => {
+            db = makeMemoryDatabase();
+            const memoryA = insertMemory(db, {
+                projectPath: "/repo/project-a",
+                category: "NAMING",
+                content: "Project A naming",
+            });
+            const memoryB = insertMemory(db, {
+                projectPath: "/repo/project-b",
+                category: "NAMING",
+                content: "Project B naming",
+            });
+
+            saveEmbedding(db, memoryA.id, new Float32Array([1, 2, 3]), "local:model-x");
+            saveEmbedding(db, memoryB.id, new Float32Array([4, 5, 6]), "local:model-x");
+
+            clearEmbeddingsForProject(db, "/repo/project-a");
+
+            expect(loadAllEmbeddings(db, "/repo/project-a")).toEqual(new Map());
+            expect(getStoredModelId(db, "/repo/project-a")).toBeNull();
+            expect(loadAllEmbeddings(db, "/repo/project-b").size).toBe(1);
+            expect(getStoredModelId(db, "/repo/project-b")).toBe("local:model-x");
         });
     });
 

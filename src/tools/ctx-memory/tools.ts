@@ -1,4 +1,5 @@
 import { type ToolDefinition, tool } from "@opencode-ai/plugin";
+import { getMemoryByHash, updateMemorySeenCount } from "../../features/magic-context/memory";
 import {
     archiveMemory,
     CATEGORY_PRIORITY,
@@ -11,6 +12,7 @@ import {
     updateMemoryStatus,
 } from "../../features/magic-context/memory";
 import { embedText, getEmbeddingModelId } from "../../features/magic-context/memory/embedding";
+import { computeNormalizedHash } from "../../features/magic-context/memory/normalize-hash";
 import { log } from "../../shared/logger";
 import { CTX_MEMORY_DESCRIPTION, CTX_MEMORY_TOOL_NAME } from "./constants";
 import type { CtxMemoryArgs, CtxMemoryToolDeps } from "./types";
@@ -140,6 +142,18 @@ function createCtxMemoryTool(deps: CtxMemoryToolDeps): ToolDefinition {
                 const category = getValidatedCategory(rawCategory);
                 if (!category) {
                     return `Error: Unknown memory category '${rawCategory}'.`;
+                }
+
+                // Check for duplicate before inserting to avoid SQLite UNIQUE constraint errors
+                const existingMemory = getMemoryByHash(
+                    deps.db,
+                    deps.projectPath,
+                    category,
+                    computeNormalizedHash(content),
+                );
+                if (existingMemory) {
+                    updateMemorySeenCount(deps.db, existingMemory.id);
+                    return `Memory already exists [ID: ${existingMemory.id}] in ${category} (seen count incremented).`;
                 }
 
                 const memory = insertMemory(deps.db, {

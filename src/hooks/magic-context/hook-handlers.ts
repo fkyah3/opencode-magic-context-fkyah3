@@ -24,7 +24,6 @@ export type ToolUsageSinceUserTurn = Map<string, number>;
 export type FlushedSessions = Set<string>;
 export type LastHeuristicsTurnId = Map<string, string>;
 export type EmergencyNudgeFired = Set<string>;
-export type SidekickRanSessions = Set<string>;
 
 export function getLiveNotificationParams(
     sessionId: string,

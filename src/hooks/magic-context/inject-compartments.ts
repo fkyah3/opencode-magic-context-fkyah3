@@ -60,11 +60,49 @@ function renderMemoryBlock(memories: Memory[]): string | null {
     return `<project-memory>\n${sections.join("\n")}\n</project-memory>`;
 }
 
+const CHARS_PER_TOKEN_ESTIMATE = 4;
+
+/**
+ * Sort memories by priority (permanent first, then higher seen_count) and trim to budget.
+ * Estimates ~4 chars per token for budget enforcement.
+ */
+function trimMemoriesToBudget(memories: Memory[], budgetTokens: number): Memory[] {
+    const sorted = [...memories].sort((a, b) => {
+        // Permanent memories first
+        if (a.status === "permanent" && b.status !== "permanent") return -1;
+        if (b.status === "permanent" && a.status !== "permanent") return 1;
+        // Then by seen count descending (more frequently seen = higher priority)
+        return b.seenCount - a.seenCount;
+    });
+
+    const result: Memory[] = [];
+    let usedTokens = 0;
+
+    for (const memory of sorted) {
+        // Estimate: category tag overhead (~20 chars) + "- " prefix + content
+        const memoryTokens = Math.ceil((memory.content.length + 22) / CHARS_PER_TOKEN_ESTIMATE);
+        if (usedTokens + memoryTokens > budgetTokens) {
+            break;
+        }
+        result.push(memory);
+        usedTokens += memoryTokens;
+    }
+
+    if (result.length < memories.length) {
+        log(
+            `[magic-context] trimmed memories from ${memories.length} to ${result.length} to fit injection budget of ${budgetTokens} tokens`,
+        );
+    }
+
+    return result;
+}
+
 export function prepareCompartmentInjection(
     db: Database,
     sessionId: string,
     messages: MessageLike[],
     projectPath?: string,
+    injectionBudgetTokens?: number,
 ): PreparedCompartmentInjection | null {
     const compartments = getCompartments(db, sessionId);
     if (compartments.length === 0) {
@@ -89,7 +127,10 @@ export function prepareCompartmentInjection(
             memoryBlock = cached.memory_block_cache;
             memoryCount = cached.memory_block_count;
         } else {
-            const memories = getMemoriesByProject(db, projectPath, ["active", "permanent"]);
+            let memories = getMemoriesByProject(db, projectPath, ["active", "permanent"]);
+            if (injectionBudgetTokens && memories.length > 0) {
+                memories = trimMemoriesToBudget(memories, injectionBudgetTokens);
+            }
             memoryCount = memories.length;
             memoryBlock = renderMemoryBlock(memories) ?? undefined;
 

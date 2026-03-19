@@ -35,7 +35,11 @@ function getRootCommitHash(directory: string): string | undefined {
 }
 
 function directoryFallback(directory: string): string {
-    return `dir:${path.basename(path.resolve(directory))}`;
+    // Use a hash of the full canonical path to avoid collisions between
+    // directories with the same basename (e.g. /tmp/api vs /work/api).
+    const canonical = path.resolve(directory);
+    const hash = Bun.hash(canonical).toString(16).slice(0, 12);
+    return `dir:${hash}`;
 }
 
 /**

@@ -112,6 +112,7 @@ export function createTransform(deps: TransformDeps) {
                 sessionId,
                 messages,
                 projectPath,
+                deps.memoryConfig?.injectionBudgetTokens,
             );
         }
 
@@ -207,6 +208,10 @@ export function createTransform(deps: TransformDeps) {
             compartmentDirectory,
             messages,
             pendingCompartmentInjection,
+            projectPath: deps.memoryConfig?.enabled
+                ? resolveProjectIdentity(deps.directory ?? process.cwd())
+                : undefined,
+            injectionBudgetTokens: deps.memoryConfig?.injectionBudgetTokens,
             getNotificationParams: deps.getNotificationParams
                 ? () => deps.getNotificationParams!(sessionId)
                 : undefined,

@@ -71,7 +71,7 @@ function getStoredModelIdStatement(db: Database): PreparedStatement {
     let stmt = getStoredModelIdStatements.get(db);
     if (!stmt) {
         stmt = db.prepare(
-            "SELECT model_id AS modelId FROM memory_embeddings WHERE model_id IS NOT NULL LIMIT 1",
+            "SELECT memory_embeddings.model_id AS modelId FROM memory_embeddings INNER JOIN memories ON memories.id = memory_embeddings.memory_id WHERE memories.project_path = ? AND memory_embeddings.model_id IS NOT NULL LIMIT 1",
         );
         getStoredModelIdStatements.set(db, stmt);
     }
@@ -81,7 +81,9 @@ function getStoredModelIdStatement(db: Database): PreparedStatement {
 function getClearAllEmbeddingsStatement(db: Database): PreparedStatement {
     let stmt = clearAllEmbeddingsStatements.get(db);
     if (!stmt) {
-        stmt = db.prepare("DELETE FROM memory_embeddings");
+        stmt = db.prepare(
+            "DELETE FROM memory_embeddings WHERE memory_id IN (SELECT id FROM memories WHERE project_path = ?)",
+        );
         clearAllEmbeddingsStatements.set(db, stmt);
     }
     return stmt;
@@ -112,11 +114,11 @@ export function deleteEmbedding(db: Database, memoryId: number): void {
     getDeleteEmbeddingStatement(db).run(memoryId);
 }
 
-export function getStoredModelId(db: Database): string | null {
-    const row = getStoredModelIdStatement(db).get() as StoredModelIdRow | undefined;
+export function getStoredModelId(db: Database, projectPath: string): string | null {
+    const row = getStoredModelIdStatement(db).get(projectPath) as StoredModelIdRow | undefined;
     return typeof row?.modelId === "string" ? row.modelId : null;
 }
 
-export function clearAllEmbeddings(db: Database): void {
-    getClearAllEmbeddingsStatement(db).run();
+export function clearEmbeddingsForProject(db: Database, projectPath: string): void {
+    getClearAllEmbeddingsStatement(db).run(projectPath);
 }

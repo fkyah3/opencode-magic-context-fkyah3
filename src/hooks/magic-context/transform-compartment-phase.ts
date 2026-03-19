@@ -26,6 +26,8 @@ interface RunCompartmentPhaseArgs {
     compartmentDirectory: string;
     messages: MessageLike[];
     pendingCompartmentInjection: PreparedCompartmentInjection | null;
+    projectPath?: string;
+    injectionBudgetTokens?: number;
     getNotificationParams?: () => import("./send-session-notification").NotificationParams;
 }
 
@@ -70,6 +72,8 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
             args.db,
             args.resolvedSessionId,
             args.messages,
+            args.projectPath,
+            args.injectionBudgetTokens,
         );
     }
 

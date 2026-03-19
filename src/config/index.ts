@@ -36,7 +36,11 @@ function loadConfigFile(configPath: string): Record<string, unknown> | null {
             return null;
         }
         return parseJsonc<Record<string, unknown>>(readFileSync(configPath, "utf-8"));
-    } catch (_error) {
+    } catch (error) {
+        console.warn(
+            `[magic-context] failed to load config from ${configPath}:`,
+            error instanceof Error ? error.message : error,
+        );
         return null;
     }
 }
@@ -91,7 +95,10 @@ function parsePluginConfig(rawConfig: Record<string, unknown>): MagicContextPlug
 
 export function loadPluginConfig(directory: string): MagicContextPluginConfig {
     const userDetected = detectConfigFile(getUserConfigBasePath());
-    const projectDetected = detectConfigFile(getProjectConfigBasePath(directory));
+    // Check project root first, then .opencode/ — root takes precedence
+    const rootDetected = detectConfigFile(join(directory, CONFIG_FILE_BASENAME));
+    const dotOpenCodeDetected = detectConfigFile(getProjectConfigBasePath(directory));
+    const projectDetected = rootDetected.format !== "none" ? rootDetected : dotOpenCodeDetected;
 
     const userConfig = userDetected.format === "none" ? null : loadConfigFile(userDetected.path);
     const projectConfig =

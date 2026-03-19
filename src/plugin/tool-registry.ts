@@ -3,7 +3,7 @@ import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "../config/schema/magic-context";
 import type { MagicContextPluginConfig } from "../config";
 import { DEFAULT_PROTECTED_TAGS } from "../features/magic-context/defaults";
 import {
-    clearAllEmbeddings,
+    clearEmbeddingsForProject,
     getStoredModelId,
     initializeEmbedding,
     loadAllEmbeddings,
@@ -51,13 +51,13 @@ export function createToolRegistry(args: {
 
     if (memoryEnabled) {
         const currentModelId = getEmbeddingModelId();
-        const storedModelId = getStoredModelId(db);
+        const storedModelId = getStoredModelId(db, projectPath);
         const hasEmbeddings = loadAllEmbeddings(db, projectPath).size > 0;
 
         if (hasEmbeddings && storedModelId !== currentModelId) {
-            clearAllEmbeddings(db);
+            clearEmbeddingsForProject(db, projectPath);
             console.warn(
-                `[magic-context] embedding model changed from ${storedModelId} to ${currentModelId}; cleared stored embeddings for lazy re-generation`,
+                `[magic-context] embedding model changed from ${storedModelId} to ${currentModelId}; cleared embeddings for project ${projectPath}`,
             );
         }
     }

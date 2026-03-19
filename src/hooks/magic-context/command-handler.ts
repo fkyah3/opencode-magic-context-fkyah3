@@ -83,7 +83,11 @@ export function createMagicContextCommandHandler(deps: {
             await deps.sendNotification(sessionId, result, {});
             log(`[magic-context] command ${input.command} handled via command.execute.before`);
 
-            // OpenCode needs an exception here to stop normal command execution before model input.
+            // OpenCode limitation: the command.execute.before hook has no "handled" return path.
+            // Throwing a sentinel exception is the only way to prevent OpenCode from continuing
+            // with normal command execution (which would send the command to the model).
+            // A typed result object or custom error class with an isSentinel flag would be cleaner,
+            // but requires an upstream API change. See audit finding #20.
             throw new Error(`${SENTINEL_PREFIX}${input.command.toUpperCase()}_HANDLED__`);
         },
     };
