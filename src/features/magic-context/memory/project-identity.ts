@@ -14,6 +14,9 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
 
+// execSync is intentional here (audit #19): this runs once per unique directory per process
+// lifetime and results are cached in resolvedCache. The ~10-50ms block on first call is
+// acceptable vs threading async through all callers of resolveProjectIdentity.
 const GIT_TIMEOUT_MS = 5_000;
 const resolvedCache = new Map<string, string>();
 

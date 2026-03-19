@@ -1,3 +1,8 @@
+// Note on prepared statement caching (audit #15): hot paths in storage-memory-embeddings.ts
+// and storage-tags.ts use WeakMap<Database, PreparedStatement> caching. These storage-ops
+// functions (queuePendingOp, getPendingOps) run a few times per turn and Bun's SQLite driver
+// internally caches prepared statements, so the WeakMap pattern here would save only the
+// db.prepare() call overhead (~0.01ms). Not worth the added complexity.
 import type { Database } from "bun:sqlite";
 import { log } from "../../shared/logger";
 import type { PendingOp } from "./types";

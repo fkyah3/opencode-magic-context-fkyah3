@@ -80,6 +80,9 @@ async function getSemanticScores(
     const embeddings = await ensureMemoryEmbeddings({
         db: deps.db,
         memories,
+        // Loads all project embeddings per call. For typical projects (<500 memories, ~150KB)
+        // this takes <5ms from SQLite and the tool fires 1-2x per turn. Not worth caching
+        // across calls within a turn. See audit #14.
         existingEmbeddings: loadAllEmbeddings(deps.db, deps.projectPath),
     });
 

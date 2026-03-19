@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { DEFAULT_PROTECTED_TAGS } from "../../features/magic-context/defaults";
 import { AgentOverrideConfigSchema } from "./agent-overrides";
 
 export const DEFAULT_NUDGE_INTERVAL_TOKENS = 10_000;
@@ -192,9 +193,12 @@ export const MagicContextConfigSchema = z
         const { dreaming, ...rest } = data;
         const config: MagicContextConfig = {
             ...rest,
-            protected_tags: data.protected_tags ?? 5,
+            protected_tags: data.protected_tags ?? DEFAULT_PROTECTED_TAGS,
         };
 
+        // Non-enumerable intentional: dreaming is merged separately in loadPluginConfig
+        // (not via spread) to avoid double-assignment. Keeping it non-enumerable prevents
+        // it from leaking into spreads while still being directly accessible. See audit #28.
         Object.defineProperty(config, "dreaming", {
             value: dreaming,
             enumerable: false,

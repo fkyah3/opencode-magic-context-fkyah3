@@ -39,6 +39,8 @@ export function createToolRegistry(args: {
     const db = openDatabase();
     if (!isDatabasePersisted(db)) {
         const reason = getDatabasePersistenceError(db);
+        // console.warn intentional: this runs during plugin init before the file logger is
+        // guaranteed to be ready, and storage failure is user-visible enough to warrant stderr.
         console.warn(
             `[magic-context] persistent storage unavailable; disabling magic-context tools${reason ? `: ${reason}` : ""}`,
         );
@@ -56,6 +58,7 @@ export function createToolRegistry(args: {
 
         if (hasEmbeddings && storedModelId !== currentModelId) {
             clearEmbeddingsForProject(db, projectPath);
+            // console.warn intentional: embedding wipe is a rare, user-visible event during init.
             console.warn(
                 `[magic-context] embedding model changed from ${storedModelId} to ${currentModelId}; cleared embeddings for project ${projectPath}`,
             );
