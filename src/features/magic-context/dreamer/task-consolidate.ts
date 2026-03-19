@@ -1,7 +1,11 @@
 import type { Database } from "bun:sqlite";
 import { cosineSimilarity, embedText, getEmbeddingModelId } from "../memory/embedding";
 import { computeNormalizedHash } from "../memory/normalize-hash";
-import { loadAllEmbeddings, saveEmbedding } from "../memory/storage-memory-embeddings";
+import {
+    deleteEmbedding,
+    loadAllEmbeddings,
+    saveEmbedding,
+} from "../memory/storage-memory-embeddings";
 import {
     getMemoriesByProject,
     mergeMemoryStats,
@@ -141,6 +145,9 @@ export async function runConsolidateTask(
                     nextContent,
                     computeNormalizedHash(nextContent),
                 );
+                // Delete stale embedding first so a failed re-embed leaves "no embedding"
+                // rather than an embedding matching the old content. See audit #26.
+                deleteEmbedding(db, survivor.id);
                 if (nextEmbedding) {
                     saveEmbedding(db, survivor.id, nextEmbedding, getEmbeddingModelId());
                 }
