@@ -10,19 +10,19 @@ import type { Memory } from "../memory/types";
 import { chatCompletions } from "./client";
 import type { OpenAIChatMessage, OpenAIChatTool, SidekickConfig } from "./types";
 
-const DEFAULT_SYSTEM_PROMPT = `You are a context retrieval agent. Given a user's message to an AI coding assistant, fetch relevant project memories and write a brief context note.
+const DEFAULT_SYSTEM_PROMPT = `You are a context retrieval agent. Given a user's prompt to an AI coding assistant, search project memories and return ONLY relevant results.
 
 Rules:
-- Use search_memory with different queries to find relevant facts. Prefer 2-3 targeted searches.
-- Do NOT hallucinate or infer causality. Only report what the memories actually say.
-- Do NOT try to solve the user's problem or give advice.
-- Finish within 3 tool calls. After searching, write your context note immediately.
+- Use search_memory 1-3 times with targeted queries.
+- If no memories are found, respond with exactly: "No relevant memories found."
+- Do NOT explain why no results were found. Do NOT speculate. Do NOT give advice.
+- Do NOT wrap your response in markdown, headers, or commentary.
+- Only report what the memories actually say — never fabricate or paraphrase.
 
-Your context note format:
-- One sentence: what the user likely wants to do
-- Bullet list: relevant memories grouped by topic (quote them, don't paraphrase)
+When memories ARE found, respond with:
+- Bullet list of relevant memories grouped by topic (quote them directly)
 
-Keep it under 200 words. Only include memories you actually found — never fabricate.`;
+Keep it under 150 words. No preamble, no sign-off.`;
 
 const SEARCH_TOOL: OpenAIChatTool = {
     type: "function",
@@ -127,6 +127,14 @@ async function searchMemoryTool(
     return formatMemories(combined);
 }
 
+/**
+ * Strip <think>...</think> blocks emitted by reasoning models (DeepSeek, Qwen, etc.).
+ * These contain chain-of-thought traces that shouldn't appear in the augmentation output.
+ */
+function stripThinkingBlocks(text: string): string {
+    return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+}
+
 function getToolCallSummary(message: OpenAIChatMessage): string[] {
     return (message.tool_calls ?? []).map((toolCall) => toolCall.function.name);
 }
@@ -179,7 +187,7 @@ export async function runSidekick(deps: {
 
             const toolCalls = assistantMessage.tool_calls ?? [];
             if (toolCalls.length === 0) {
-                const finalText = assistantMessage.content?.trim() ?? "";
+                const finalText = stripThinkingBlocks(assistantMessage.content?.trim() ?? "");
                 return finalText.length > 0 ? finalText : null;
             }
 
