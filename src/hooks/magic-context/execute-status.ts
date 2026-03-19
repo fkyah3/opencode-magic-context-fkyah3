@@ -14,7 +14,7 @@ import {
 } from "./compartment-trigger";
 import { resolveExecuteThreshold } from "./event-resolvers";
 import { formatBytes } from "./format-bytes";
-import { getErrorMessage } from "./get-error-message";
+import { getErrorMessage } from "../../shared/error-message";
 import {
     formatRollingNudgeBand,
     getRollingNudgeBand,

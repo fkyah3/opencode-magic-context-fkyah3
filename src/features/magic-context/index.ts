@@ -2,7 +2,6 @@ export * from "./compaction";
 export * from "./compartment-storage";
 export * from "./dreamer";
 export * from "./memory";
-export * from "./memory";
 export * from "./range-parser";
 export * from "./scheduler";
 export * from "./sidekick";

@@ -11,7 +11,7 @@ import { log } from "../../shared/logger";
 import { applyContextNudge } from "./apply-context-nudge";
 import { getActiveCompartmentRun } from "./compartment-runner";
 import { dropStaleReduceCalls } from "./drop-stale-reduce-calls";
-import { getErrorMessage } from "./get-error-message";
+import { getErrorMessage } from "../../shared/error-message";
 import { applyHeuristicCleanup } from "./heuristic-cleanup";
 import {
     type PreparedCompartmentInjection,

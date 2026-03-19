@@ -6,7 +6,7 @@ import {
     updateTagStatus,
 } from "../../features/magic-context/storage";
 import { log } from "../../shared/logger";
-import { getErrorMessage } from "./get-error-message";
+import { getErrorMessage } from "../../shared/error-message";
 
 export function executeFlush(db: Database, sessionId: string): string {
     try {

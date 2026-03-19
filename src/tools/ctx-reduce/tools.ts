@@ -57,8 +57,6 @@ function createCtxReduceTool(deps: CtxReduceToolDeps): ToolDefinition {
                 .slice(0, deps.protectedTags);
             const protectedSet = new Set(protectedTagIds);
 
-            const _protectedDrops = [...new Set(dropIds.filter((id) => protectedSet.has(id)))];
-
             const tagStatusMap = new Map(allTags.map((tag) => [tag.tagNumber, tag.status]));
 
             const pendingOps = getPendingOps(deps.db, sessionId);
