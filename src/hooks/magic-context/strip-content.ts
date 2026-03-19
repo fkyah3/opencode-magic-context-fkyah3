@@ -26,11 +26,20 @@ function isSystemInjectedText(text: string): boolean {
 /**
  * Remove messages that are system-injected (notifications, reminders, internal markers).
  * These are internal plumbing messages that should never reach the LLM.
- * No age check — ALL system-injected messages are stripped regardless of position.
+ * Only strips messages BEFORE `protectedTailStart` — recent messages in the
+ * protected tail may contain actionable info (e.g., background task completion
+ * notifications with task IDs the agent needs for background_output).
  */
-export function stripSystemInjectedMessages(messages: MessageLike[]): number {
+export function stripSystemInjectedMessages(
+    messages: MessageLike[],
+    protectedTailStart: number,
+): number {
     let stripped = 0;
     for (let i = messages.length - 1; i >= 0; i--) {
+        // Don't strip messages in the protected tail — they may contain
+        // actionable info like background task IDs
+        if (i >= protectedTailStart) continue;
+
         const msg = messages[i];
         if (msg.parts.length === 0) continue;
 

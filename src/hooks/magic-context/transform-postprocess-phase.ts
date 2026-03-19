@@ -253,9 +253,13 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
         log(`[magic-context] stripped ${strippedDropped} empty dropped-placeholder messages`);
     }
 
-    // Remove system-injected messages (notifications, reminders, internal markers).
-    // No age check — these are internal plumbing and should NEVER reach the LLM.
-    const strippedSystemInjected = stripSystemInjectedMessages(args.messages);
+    // Remove system-injected messages (notifications, reminders, internal markers)
+    // that are OUTSIDE the protected tail. Recent ones in the tail may contain
+    // actionable info (e.g., background task IDs the agent needs for background_output).
+    // Use the configured protected_tags count to find the boundary — messages in the
+    // last N tags are kept.
+    const protectedTailStart = Math.max(0, args.messages.length - args.protectedTags * 2);
+    const strippedSystemInjected = stripSystemInjectedMessages(args.messages, protectedTailStart);
     if (strippedSystemInjected > 0) {
         log(
             `[magic-context] stripped ${strippedSystemInjected} system-injected messages (notifications/reminders)`,
