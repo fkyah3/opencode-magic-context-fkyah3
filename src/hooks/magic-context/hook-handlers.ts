@@ -98,6 +98,7 @@ export function createEventHook(args: {
     emergencyNudgeFired: EmergencyNudgeFired;
     flushedSessions: FlushedSessions;
     lastHeuristicsTurnId: LastHeuristicsTurnId;
+    pendingSidekickResults?: Map<string, string>;
     client: PluginContext["client"];
     protectedTags: number;
 }) {
@@ -126,6 +127,7 @@ export function createEventHook(args: {
             args.emergencyNudgeFired.delete(sessionId);
             args.flushedSessions.delete(sessionId);
             args.lastHeuristicsTurnId.delete(sessionId);
+            args.pendingSidekickResults?.delete(sessionId);
         }
 
         const entry = args.contextUsageMap.get(sessionId);

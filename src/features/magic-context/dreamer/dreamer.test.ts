@@ -101,7 +101,7 @@ describe("dreamer", () => {
                 expiresAt: 5_000,
             });
 
-            const result = await runDecayTask(db, { promotionThreshold: 3 });
+            const result = await runDecayTask(db, { promotionThreshold: 3 }, "/repo/project");
 
             expect(result).toEqual({ expired: 1, promoted: 0, archived: 0 });
             expect(getMemoryById(db, memory.id)?.status).toBe("archived");
@@ -117,7 +117,7 @@ describe("dreamer", () => {
             });
             db.prepare("UPDATE memories SET retrieval_count = 3 WHERE id = ?").run(memory.id);
 
-            const result = await runDecayTask(db, { promotionThreshold: 3 });
+            const result = await runDecayTask(db, { promotionThreshold: 3 }, "/repo/project");
 
             expect(result).toEqual({ expired: 0, promoted: 1, archived: 0 });
             expect(getMemoryById(db, memory.id)?.status).toBe("permanent");
@@ -142,7 +142,7 @@ describe("dreamer", () => {
                 memory.id,
             );
 
-            const result = await runDecayTask(db, { promotionThreshold: 5 });
+            const result = await runDecayTask(db, { promotionThreshold: 5 }, "/repo/project");
 
             expect(result).toEqual({ expired: 0, promoted: 0, archived: 1 });
             expect(getMemoryById(db, memory.id)?.status).toBe("archived");

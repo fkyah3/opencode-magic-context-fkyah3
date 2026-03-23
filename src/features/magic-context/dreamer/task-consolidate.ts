@@ -33,10 +33,16 @@ export interface ConsolidationResult {
 }
 
 function parseMergedFrom(memory: Memory): number[] {
-    const parsed = memory.mergedFrom ? JSON.parse(memory.mergedFrom) : [];
-    return Array.isArray(parsed)
-        ? parsed.filter((value): value is number => typeof value === "number")
-        : [];
+    if (!memory.mergedFrom) return [];
+    try {
+        const parsed = JSON.parse(memory.mergedFrom);
+        return Array.isArray(parsed)
+            ? parsed.filter((value): value is number => typeof value === "number")
+            : [];
+    } catch {
+        // Corrupt mergedFrom value — treat as empty rather than aborting consolidation
+        return [];
+    }
 }
 
 function getBestStatus(memories: Memory[]): MemoryStatus {

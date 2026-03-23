@@ -20,15 +20,16 @@ function isIdRow(row: unknown): row is IdRow {
 export async function runDecayTask(
     db: Database,
     config: { promotionThreshold: number },
+    projectPath: string,
 ): Promise<DecayResult> {
     const now = Date.now();
     const cutoff = now - UNUSED_MEMORY_AGE_MS;
 
     const expiredIds = db
         .prepare(
-            "SELECT id FROM memories WHERE status != 'archived' AND expires_at IS NOT NULL AND expires_at < ? ORDER BY id ASC",
+            "SELECT id FROM memories WHERE project_path = ? AND status != 'archived' AND expires_at IS NOT NULL AND expires_at < ? ORDER BY id ASC",
         )
-        .all(now)
+        .all(projectPath, now)
         .filter(isIdRow)
         .map((row) => row.id);
 
@@ -38,9 +39,9 @@ export async function runDecayTask(
 
     const promotedIds = db
         .prepare(
-            "SELECT id FROM memories WHERE status = 'active' AND retrieval_count >= ? ORDER BY id ASC",
+            "SELECT id FROM memories WHERE project_path = ? AND status = 'active' AND retrieval_count >= ? ORDER BY id ASC",
         )
-        .all(config.promotionThreshold)
+        .all(projectPath, config.promotionThreshold)
         .filter(isIdRow)
         .map((row) => row.id);
 
@@ -51,14 +52,15 @@ export async function runDecayTask(
     const archivalIds = db
         .prepare(
             `SELECT id FROM memories
-             WHERE status = 'active'
+             WHERE project_path = ?
+               AND status = 'active'
                AND (
                    (last_retrieved_at IS NULL AND created_at < ?)
                    OR (last_retrieved_at IS NOT NULL AND last_retrieved_at < ?)
                )
              ORDER BY id ASC`,
         )
-        .all(cutoff, cutoff)
+        .all(projectPath, cutoff, cutoff)
         .filter(isIdRow)
         .map((row) => row.id)
         .filter((id) => !expiredIds.includes(id));

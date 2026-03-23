@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { getErrorMessage } from "../../../shared/error-message";
+import { log } from "../../../shared/logger";
 import { acquireLease, getLeaseHolder, releaseLease, renewLease } from "./lease";
 import { setDreamState } from "./storage-dream-state";
 import { runConsolidateTask } from "./task-consolidate";
@@ -57,9 +58,11 @@ export async function runDream(args: {
             try {
                 let taskResult: unknown;
                 if (taskName === "decay") {
-                    taskResult = await runDecayTask(args.db, {
-                        promotionThreshold: args.promotionThreshold,
-                    });
+                    taskResult = await runDecayTask(
+                        args.db,
+                        { promotionThreshold: args.promotionThreshold },
+                        args.projectPath,
+                    );
                 } else if (taskName === "consolidate") {
                     taskResult = await runConsolidateTask(args.db, args.projectPath);
                 } else {
@@ -80,7 +83,9 @@ export async function runDream(args: {
                 });
             }
 
-            renewLease(args.db, holderId);
+            if (!renewLease(args.db, holderId)) {
+                log("[dreamer] lease renewal failed mid-run — lease may have expired");
+            }
         }
     } finally {
         releaseLease(args.db, holderId);
