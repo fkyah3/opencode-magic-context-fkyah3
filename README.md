@@ -1,20 +1,33 @@
-# Magic Context
+<h1 align="center">Magic Context</h1>
 
-Your AI coding agent forgets everything the moment a conversation gets long enough. Context windows fill up, old messages get dropped, and the agent loses track of decisions it made twenty minutes ago. Magic Context fixes this.
+<p align="center">
+  <strong>Cache-aware infinite context, cross-session memory, and background history compression for AI coding agents.</strong><br>
+  An <a href="https://github.com/anomalyco/opencode">OpenCode</a> plugin that keeps your agent's memory intact — no matter how long the session runs.
+</p>
 
-It's an [OpenCode](https://github.com/anomalyco/opencode) plugin that runs a background historian — a separate, lightweight model that compresses older conversation into structured summaries and durable facts while the main agent keeps working. The agent never stops to summarize its own history. It never notices the rewriting happening beneath it. And because every mutation is cache-aware, nothing gets invalidated until the provider's cached prefix expires, so you're not paying to throw away work that's already cached.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@cortexkit/magic-context-opencode"><img src="https://img.shields.io/npm/v/@cortexkit/magic-context-opencode?color=blue&style=flat-square" alt="npm"></a>
+  <a href="https://github.com/ualtinok/opencode-magic-context/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License"></a>
+</p>
 
-Across sessions, architecture decisions, constraints, and preferences persist in a cross-session memory system. A new conversation starts with everything the previous one learned, without replaying old transcripts.
+<p align="center">
+  <a href="#get-started">Get Started</a> ·
+  <a href="#what-is-magic-context">What is Magic Context?</a> ·
+  <a href="#what-your-agent-gets">What Your Agent Gets</a> ·
+  <a href="#how-it-works">How It Works</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="#configuration">Configuration</a>
+</p>
 
 ---
 
-## Installation
+## Get Started
 
 ```sh
 npm install @cortexkit/magic-context-opencode
 ```
 
-Add it to your OpenCode config (`opencode.json` or `opencode.jsonc`):
+Add to your OpenCode config (`opencode.json` or `opencode.jsonc`):
 
 ```jsonc
 {
@@ -33,17 +46,13 @@ Magic Context replaces OpenCode's built-in compaction — the two cannot run tog
 }
 ```
 
----
-
-## Quick Start
-
-Create `magic-context.jsonc` in your project root (or `.opencode/magic-context.jsonc`):
+Create `magic-context.jsonc` in your project root, `.opencode/`, or `~/.config/opencode/`:
 
 ```jsonc
 {
   "enabled": true,
 
-  // Optional: which model the historian uses
+  // Which model the historian uses for background compression
   "historian": {
     "model": "anthropic/claude-haiku-4",
     "fallback_models": ["anthropic/claude-3-5-haiku"]
@@ -51,53 +60,78 @@ Create `magic-context.jsonc` in your project root (or `.opencode/magic-context.j
 }
 ```
 
-That's it. Everything else has sensible defaults. For user-wide settings, put the config at `~/.config/opencode/magic-context.jsonc` — project config merges on top.
+That's it. Everything else has sensible defaults. Project config merges on top of user-wide settings.
+
+---
+
+## What is Magic Context?
+
+AI coding agents forget everything the moment a conversation gets long enough. Context windows fill up, old messages get dropped, and the agent loses track of decisions it made twenty minutes ago.
+
+Magic Context fixes this with a background historian — a separate, lightweight model that compresses older conversation into structured summaries and durable facts while the main agent keeps working. The agent never stops to summarize its own history. It never notices the rewriting happening beneath it.
+
+Every mutation is **cache-aware**. Drops and rewrites are queued until the provider's cached prefix expires, so you're not paying to throw away work that's already cached.
+
+Across sessions, architecture decisions, constraints, and preferences persist in a **cross-session memory** system. A new conversation starts with everything the previous one learned, without replaying old transcripts.
+
+And overnight, a **dreamer** agent consolidates, verifies, and improves memories — checking them against the actual codebase and merging duplicates into clean canonical facts.
 
 ---
 
 ## What Your Agent Gets
 
-Magic Context gives the agent four tools and injects structured context automatically. Here's what each tool is for in practice.
+Magic Context injects structured context automatically and gives the agent five tools.
 
 ### `ctx_reduce` — Shed weight
 
-After a tool-heavy turn (large grep results, file reads, bash output), the agent calls `ctx_reduce` to mark stale content for removal. Drops aren't applied immediately — they're queued until the cache expires or context pressure forces it. This means the agent can drop freely without worrying about cache invalidation timing.
+After tool-heavy turns (large grep results, file reads, bash output), the agent calls `ctx_reduce` to mark stale content for removal. Drops are queued — not applied immediately — until the cache expires or context pressure forces it.
 
 ```
 ctx_reduce(drop="3-5,12")     // Drop tags 3, 4, 5, and 12
 ```
 
-Recent tags (last 5 by default) are protected. Drops targeting them stay queued until they age out.
+Recent tags (last 10 by default) are protected. Drops targeting them stay queued until they age out.
 
-### `ctx_note` — Scratch notes that survive compression
+### `ctx_expand` — Decompress history
 
-Session notes are the agent's scratchpad for durable goals, constraints, and reminders. The historian reads these notes during compression, deduplicates them, and carries them forward — so a note written early in a session survives even after the raw history around it gets replaced by compartments.
+When the agent needs to recall details from a compressed history range, it can expand specific compartment ranges back to the original conversation transcript.
 
 ```
-ctx_note(action="write", content="Always run tests before committing on this repo.")
+ctx_expand(start=100, end=200)   // Expand raw messages 100-200
+```
+
+Returns the same compact `U:`/`A:` transcript format the historian sees, capped at ~15K tokens per request. Use `start`/`end` from compartment attributes visible in `<session-history>`.
+
+### `ctx_note` — Deferred intentions
+
+Session notes are the agent's scratchpad for things to tackle later — not task tracking (that's what todos are for), but deferred work and reminders that should surface at the right time.
+
+```
+ctx_note(action="write", content="After this fix, check if the compressor budget formula is correct")
 ctx_note(action="read")
 ```
 
+Notes surface automatically at natural work boundaries: after commits, after historian runs, and after all todos complete.
+
 ### `ctx_memory` — Persistent cross-session knowledge
 
-Architecture decisions, naming conventions, user preferences — anything that should survive across conversations. Memories are categorized and can be scoped to a project or shared globally. The historian automatically promotes qualifying session facts to memories, but the agent can also write them explicitly.
+Architecture decisions, naming conventions, user preferences — anything that should survive across conversations. Memories are project-scoped and automatically promoted from session facts by the historian.
 
 ```
-ctx_memory(action="write", category="ARCHITECTURE_DECISIONS", content="Event sourcing for the orders domain.")
-ctx_memory(action="search", query="authentication approach", category="CONSTRAINTS")
+ctx_memory(action="write", category="ARCHITECTURE_DECISIONS", content="Event sourcing for orders.")
+ctx_memory(action="search", query="authentication approach")
 ctx_memory(action="delete", id=42)
 ```
 
 ### Automatic context injection
 
-Every turn, Magic Context injects a `<session-history>` block into the conversation containing:
+Every turn, Magic Context injects a `<session-history>` block containing:
 
 - **Project memories** — cross-session decisions, constraints, and preferences
 - **Compartments** — structured summaries replacing older raw history
 - **Session facts** — durable categorized facts from the current session
-- **Session notes** — maintained `ctx_note` content
 
-This block is stable between historian runs. When the agent writes new memories via `ctx_memory`, the write is persisted to the database immediately but the injected block doesn't change until the next historian run — so writes never bust the cache mid-conversation.
+This block is stable between historian runs. Memory writes persist immediately for search but don't change the injected block until the next historian run — so writes never bust the cache mid-conversation.
 
 ---
 
@@ -112,9 +146,9 @@ Every message, tool output, and file attachment gets a monotonically increasing 
 When the agent calls `ctx_reduce`, drops go into a pending queue — not applied immediately. Two conditions trigger execution:
 
 - **Cache expired** — enough time has passed that the cached prefix is likely stale (configurable, default 5 minutes)
-- **Threshold reached** — context usage hits `execute_threshold_percentage` (default 65%), at which point waiting risks running out of space
+- **Threshold reached** — context usage hits `execute_threshold_percentage` (default 65%)
 
-Between those triggers, the conversation continues unchanged. The agent doesn't need to think about timing.
+Between triggers, the conversation continues unchanged. The agent doesn't need to think about timing.
 
 ### Background historian
 
@@ -122,103 +156,118 @@ When local drops aren't buying enough headroom, Magic Context starts a historian
 
 - **Compartments** — chronological blocks that replace older raw messages
 - **Facts** — durable decisions, constraints, and preferences (categorized)
-- **Notes** — rewritten and deduplicated `ctx_note` content
 
-The historian runs asynchronously. The main agent never waits for it. When the historian finishes, its output is materialized into the conversation on the next transform pass.
+The historian runs asynchronously. The main agent never waits for it. When the historian finishes, its output is materialized on the next transform pass.
+
+A **separate compressor** pass fires when the rendered history block exceeds the configured history budget, merging the oldest compartments to keep the injected context lean.
 
 ### Nudging
 
-As context usage grows, Magic Context sends rolling reminders to the agent suggesting it reduce. Reminder cadence tightens as usage approaches the threshold. If the agent has recently called `ctx_reduce`, reminders are suppressed — it already knows. An emergency nudge at 80% always fires regardless of cooldown.
+As context usage grows, Magic Context sends rolling reminders suggesting the agent reduce. Cadence tightens as usage approaches the threshold — from gentle reminders to urgent warnings. If the agent recently called `ctx_reduce`, reminders are suppressed. An emergency nudge at 80% always fires.
 
 ### Cross-session memory
 
-After each historian run, qualifying facts are promoted to the persistent memory store. On every subsequent turn, active memories are injected alongside compartments in the `<session-history>` block. When a new session starts, it inherits all project and global memories from previous sessions.
+After each historian run, qualifying facts are promoted to the persistent memory store. On every subsequent turn, active memories are injected in `<session-history>`. New sessions inherit all project memories from previous sessions.
 
-Memories are searchable via `ctx_memory(action="search", ...)` using semantic embeddings (local by default) with full-text search as a fallback.
+Memories are searchable via `ctx_memory(action="search", ...)` using semantic embeddings (local by default) with full-text search as fallback.
 
----
+### Dreamer
 
-## Configuration
+An optional background agent that maintains memory quality overnight:
 
-All settings live in `magic-context.jsonc` as flat top-level keys. See **[CONFIGURATION.md](./CONFIGURATION.md)** for the full reference — cache TTL tuning, historian model selection, embedding providers, memory settings, sidekick, and dreaming.
+- **Consolidate** — merge semantically similar memories into canonical facts
+- **Verify** — check memories against current codebase (configs, paths, code patterns)
+- **Archive stale** — retire memories referencing removed features or old paths
+- **Improve** — rewrite verbose memories into terse operational form
+- **Maintain docs** — update ARCHITECTURE.md and STRUCTURE.md from codebase changes
+
+The dreamer runs during a configurable schedule window and creates ephemeral OpenCode child sessions for each task.
 
 ---
 
 ## Commands
 
-### `/ctx-status`
+| Command | Description |
+|---------|-------------|
+| `/ctx-status` | Debug view: tags, pending drops, cache TTL, nudge state, historian progress, compartment coverage, history compression budget |
+| `/ctx-flush` | Force all queued operations immediately, bypassing cache TTL |
+| `/ctx-recomp` | Rebuild compartments and facts from raw history — use when stored state seems wrong |
+| `/ctx-aug` | Run sidekick augmentation on a prompt — retrieves relevant memories via a separate model |
+| `/ctx-dream` | Run dreamer maintenance on demand — consolidate, verify, archive, improve memories |
 
-Debug view of the current session: tag counts, pending drops, cache TTL, nudge state, historian progress, compartment coverage, and the last transform error. Run this when something seems stuck.
+---
 
-### `/ctx-flush`
+## Configuration
 
-Forces all queued operations to apply immediately, bypassing cache TTL. Reports what was released, skipped, or still deferred.
+All settings live in `magic-context.jsonc` as flat top-level keys. See **[CONFIGURATION.md](./CONFIGURATION.md)** for the full reference — cache TTL tuning, per-model execute thresholds, historian model selection, embedding providers, memory settings, sidekick, and dreamer.
 
-### `/ctx-recomp`
-
-Rebuilds compartments, facts, and notes from raw session history. Use when stored historian state seems stale or structurally wrong.
-
-### `/ctx-dream`
-
-Runs the hidden dreamer maintenance pass on demand. Dreamer uses child OpenCode sessions to consolidate, verify, archive, and rewrite persistent memories, and can also keep architecture docs in sync.
+**Config locations** (searched in order, first wins):
+1. `<project-root>/magic-context.jsonc`
+2. `<project-root>/.opencode/magic-context.jsonc`
+3. `~/.config/opencode/magic-context.jsonc`
 
 ---
 
 ## Storage
 
-All state lives in a local SQLite database:
+All durable state lives in a local SQLite database. If the database can't be opened, Magic Context disables itself and notifies the user.
 
 ```
 ~/.local/share/opencode/storage/plugin/magic-context/context.db
 ```
 
-If the database can't be opened, Magic Context disables itself.
-
 | Table | Purpose |
 |-------|---------|
 | `tags` | Tag assignments — message ID, tag number, session, status |
-| `pending_ops` | Queued drop operations with execution status |
-| `source_contents` | Raw content snapshots for reduction |
+| `pending_ops` | Queued drop operations |
+| `source_contents` | Raw content snapshots for persisted reductions |
 | `compartments` | Historian-produced structured history blocks |
 | `session_facts` | Categorized durable facts from historian runs |
-| `session_notes` | Maintained `ctx_note` content |
+| `session_notes` | Session-scoped `ctx_note` content |
 | `session_meta` | Per-session state — usage, nudge flags, anchors |
 | `memories` | Cross-session persistent memories |
 | `memory_embeddings` | Embedding vectors for semantic search |
-| `dream_state` | Dreamer scheduling, lease, and task progress |
+| `dream_state` | Dreamer lease locking and task progress |
+| `dream_queue` | Queued projects awaiting dream processing |
+| `recomp_compartments` | Staging for `/ctx-recomp` partial progress |
+| `recomp_facts` | Staging for `/ctx-recomp` partial progress |
 
 ---
 
 ## Development
 
-### Prerequisites
-
-- [Bun](https://bun.sh) 1.x
-
-### Scripts
+**Requirements:** [Bun](https://bun.sh) ≥ 1.0
 
 ```sh
-bun run build          # Build the plugin
-bun run typecheck      # Type-check without emitting
-bun test               # Run tests
-bun run lint           # Lint
-bun run lint:fix       # Lint with auto-fix
-bun run format         # Format
+bun install              # Install dependencies
+bun run build            # Build the plugin
+bun run typecheck        # Type-check without emitting
+bun test                 # Run tests
+bun run lint             # Lint (Biome)
+bun run lint:fix         # Lint with auto-fix
+bun run format           # Format (Biome)
 ```
 
-### Utility scripts
+**Utility scripts:**
 
 ```sh
-bun scripts/tail-view.ts             # Tail structured log output
-bun scripts/context-dump.ts          # Dump context DB for a session
-bun scripts/dream.ts                 # Print /ctx-dream guidance (needs live OpenCode)
-bun scripts/backfill-embeddings.ts   # Backfill missing embeddings
+bun scripts/tail-view.ts             # Show post-compartment message tail
+bun scripts/context-dump.ts          # Dump full context state for a session
+bun scripts/backfill-embeddings.ts   # Backfill missing memory embeddings
 ```
 
-Dream execution itself now requires a live OpenCode server because the dreamer runs as a hidden child-session agent. Use `/ctx-dream` inside OpenCode for the actual maintenance pass.
+Dream execution requires a live OpenCode server — the dreamer creates ephemeral child sessions. Use `/ctx-dream` inside OpenCode for on-demand maintenance.
+
+---
+
+## Contributing
+
+Bug reports and pull requests are welcome. For larger changes, open an issue first to discuss the approach.
+
+Run `bun run format` before submitting — CI rejects unformatted code.
 
 ---
 
 ## License
 
-SUL-1.0 — see [LICENSE](./LICENSE) for details.
+[MIT](LICENSE)
