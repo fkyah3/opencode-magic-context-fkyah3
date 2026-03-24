@@ -13,6 +13,13 @@ import {
 } from "./read-session-formatting";
 import { type RawMessage, readRawSessionMessagesFromDb } from "./read-session-raw";
 import { isFilePart, isTextPart, isToolPartWithOutput } from "./tag-part-guards";
+import { removeSystemReminders } from "../../shared/system-directive";
+import { OMO_INTERNAL_INITIATOR_MARKER } from "../../shared/internal-initiator-marker";
+
+/** Strip system-reminder blocks and OMO markers from user text for chunk compaction. */
+function cleanUserText(text: string): string {
+    return removeSystemReminders(text).replace(OMO_INTERNAL_INITIATOR_MARKER, "").trim();
+}
 
 export interface SessionChunk {
     startIndex: number;
@@ -131,9 +138,19 @@ export function readSessionChunk(
         if (msg.ordinal < startOrdinal) continue;
 
         const meta = { ordinal: msg.ordinal, messageId: msg.id };
+
+        // Skip user messages that are pure system notifications (background task
+        // completions, internal initiator markers, system directives). These carry
+        // zero signal for compartment summaries.
+        if (msg.role === "user" && !hasMeaningfulUserText(msg.parts)) {
+            pendingNoiseMeta.push(meta);
+            continue;
+        }
+
         const role = compactRole(msg.role);
         const compacted = compactTextForSummary(
             extractTexts(msg.parts)
+                .map((t) => (msg.role === "user" ? cleanUserText(t) : t))
                 .map(normalizeText)
                 .filter((value) => value.length > 0)
                 .join(" / "),
