@@ -18,7 +18,7 @@ const BASE_INTRO = (
 Use \`ctx_reduce\` to manage context size. It supports one operation:
 - \`drop\`: Remove entirely (best for tool outputs you already acted on).
 Syntax: "3-5", "1,2,9", or "1-5,8,12-15". Last ${protectedTags} tags are protected.
-Use \`ctx_note\` to save short session notes for durable goals, constraints, decisions, and reminders you want to persist for this session.
+Use \`ctx_note\` for deferred intentions — things to tackle later, not right now. NOT for task tracking (use todos). Notes survive context compression and you'll be reminded at natural work boundaries (after commits, historian runs, todo completion).
 Use \`ctx_memory\` to manage cross-session project memories. Write new memories, delete stale ones, promote important ones to permanent status, or list stored memories by category. Memories persist across sessions and are automatically injected into new sessions.
 Use \`ctx_recall\` to search cross-session project memories using natural language queries. Returns relevant memories ranked by semantic + keyword relevance. Use this to find previously stored architecture decisions, constraints, user preferences, config defaults, and other project knowledge.
 Use \`ctx_expand\` to decompress a compartment range to see the original conversation transcript. Use \`start\`/\`end\` from \`<compartment start=N end=M>\` attributes. Returns the compacted U:/A: transcript for that message range, capped at ~15K tokens.
@@ -192,5 +192,3 @@ ${section}
 
 Prefer many small targeted operations over one large blanket operation. Compress early and often — don't wait for warnings.`;
 }
-
-import { DEFAULT_PROTECTED_TAGS } from "../features/magic-context/defaults";

@@ -18,6 +18,7 @@ import { buildExistingStateXml } from "./compartment-runner-state-xml";
 import type { CompartmentRunnerDeps } from "./compartment-runner-types";
 import { validateChunkCoverage, validateStoredCompartments } from "./compartment-runner-validation";
 import { renderMemoryBlock } from "./inject-compartments";
+import { onNoteTrigger } from "./note-nudger";
 import { getProtectedTailStartOrdinal, readSessionChunk } from "./read-session-chunk";
 import { sendIgnoredMessage } from "./send-session-notification";
 
@@ -161,6 +162,7 @@ export async function runCompartmentAgent(deps: CompartmentRunnerDeps): Promise<
 
         updateSessionMeta(db, sessionId, { compartmentInProgress: false });
         completedSuccessfully = true;
+        onNoteTrigger(sessionId, "historian_complete");
     } catch (error: unknown) {
         // Historian runs are fail-closed because they update durable compartment state.
         const msg = getErrorMessage(error);

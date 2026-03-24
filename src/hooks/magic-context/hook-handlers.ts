@@ -10,6 +10,7 @@ import type { PluginContext } from "../../plugin/types";
 import { sessionLog } from "../../shared/logger";
 import { FORCE_COMPARTMENT_PERCENTAGE } from "./compartment-trigger";
 import { getMessageUpdatedAssistantInfo, getSessionProperties } from "./event-payloads";
+import { clearNoteNudgeState, onNoteTrigger } from "./note-nudger";
 import { resolveSessionId as resolveEventSessionId } from "./event-resolvers";
 import { generateEmergencyNudgeText } from "./nudger";
 
@@ -100,6 +101,7 @@ export function createEventHook(args: {
     flushedSessions: FlushedSessions;
     lastHeuristicsTurnId: LastHeuristicsTurnId;
     pendingSidekickResults?: Map<string, string>;
+    commitSeenLastPass?: Map<string, boolean>;
     client: PluginContext["client"];
     protectedTags: number;
 }) {
@@ -129,6 +131,8 @@ export function createEventHook(args: {
             args.flushedSessions.delete(sessionId);
             args.lastHeuristicsTurnId.delete(sessionId);
             args.pendingSidekickResults?.delete(sessionId);
+            args.commitSeenLastPass?.delete(sessionId);
+            clearNoteNudgeState(sessionId);
         }
 
         const entry = args.contextUsageMap.get(sessionId);
@@ -219,6 +223,12 @@ export function createToolExecuteAfterHook(args: {
         const turnUsage = args.toolUsageSinceUserTurn.get(typedInput.sessionID) ?? 0;
         if (typedInput.tool === "ctx_reduce") {
             args.recentReduceBySession.set(typedInput.sessionID, Date.now());
+        }
+        if (typedInput.tool === "todowrite") {
+            onNoteTrigger(typedInput.sessionID, "todos_complete");
+        }
+        if (typedInput.tool === "ctx_note") {
+            clearNoteNudgeState(typedInput.sessionID);
         }
         args.toolUsageSinceUserTurn.set(typedInput.sessionID, turnUsage + 1);
     };

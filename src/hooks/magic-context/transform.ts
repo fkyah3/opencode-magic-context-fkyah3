@@ -17,6 +17,7 @@ import {
     type PreparedCompartmentInjection,
     prepareCompartmentInjection,
 } from "./inject-compartments";
+import { onNoteTrigger } from "./note-nudger";
 import type { NudgePlacementStore } from "./nudge-placement-store";
 import type { ContextNudge } from "./nudger";
 import { stripClearedReasoning } from "./strip-content";
@@ -54,6 +55,7 @@ export interface TransformDeps {
     clearReasoningAge: number;
     flushedSessions: Set<string>;
     lastHeuristicsTurnId: Map<string, string>;
+    commitSeenLastPass?: Map<string, boolean>;
     client?: PluginContext["client"];
     directory?: string;
     memoryConfig?: {
@@ -151,6 +153,11 @@ export function createTransform(deps: TransformDeps) {
             messageTagNumbers = result.messageTagNumbers;
             batch = result.batch;
             hasRecentReduceCall = result.hasRecentReduceCall;
+            const sawCommitLastPass = deps.commitSeenLastPass?.get(sessionId) ?? false;
+            if (result.hasRecentCommit && !sawCommitLastPass) {
+                onNoteTrigger(sessionId, "commit_detected");
+            }
+            deps.commitSeenLastPass?.set(sessionId, result.hasRecentCommit);
             logTransformTiming(sessionId, "tagMessages", t0);
         } catch (error) {
             sessionLog(

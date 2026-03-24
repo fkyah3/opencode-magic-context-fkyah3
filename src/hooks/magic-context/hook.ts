@@ -132,6 +132,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
     const pendingSidekickResults = new Map<string, string>();
     const flushedSessions = new Set<string>();
     const lastHeuristicsTurnId = new Map<string, string>();
+    const commitSeenLastPass = new Map<string, boolean>();
     const variantBySession = new Map<string, string | undefined>();
     const liveModelBySession = new Map<string, { providerID: string; modelID: string }>();
     const recentReduceBySession = new Map<string, number>();
@@ -156,6 +157,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         clearReasoningAge: deps.config.clear_reasoning_age ?? 50,
         flushedSessions,
         lastHeuristicsTurnId,
+        commitSeenLastPass,
         client: deps.client,
         directory: deps.directory,
         memoryConfig: deps.config.memory
@@ -255,6 +257,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
             emergencyNudgeFired,
             flushedSessions,
             lastHeuristicsTurnId,
+            commitSeenLastPass,
             client: deps.client,
             protectedTags: deps.config.protected_tags,
         }),

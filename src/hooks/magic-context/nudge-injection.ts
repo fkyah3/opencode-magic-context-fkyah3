@@ -4,7 +4,9 @@ import type { MessageLike } from "./tag-messages";
 import { isTextPart } from "./tag-part-guards";
 
 const TRAILING_CONTEXT_NUDGE_PATTERN =
-    /(?:\s*<instruction name="context_[^"]+">[\s\S]*?<\/instruction>\s*)+$/;
+    /(?:\s*<instruction name="(?:context_[^"]+|deferred_notes)">[\s\S]*?<\/instruction>\s*)+$/;
+const TRAILING_DEFERRED_NOTES_PATTERN =
+    /(?:\s*<instruction name="deferred_notes">[\s\S]*?<\/instruction>\s*)+$/;
 
 function isToolProtocolPart(part: unknown): boolean {
     if (part === null || typeof part !== "object") return false;
@@ -37,6 +39,18 @@ function stripTrailingContextNudges(text: string): string {
     return text.replace(TRAILING_CONTEXT_NUDGE_PATTERN, "");
 }
 
+function stripTrailingDeferredNotes(text: string): string {
+    return text.replace(TRAILING_DEFERRED_NOTES_PATTERN, "");
+}
+
+function isAppendableAssistantMessage(message: MessageLike): boolean {
+    return (
+        message.info.role === "assistant" &&
+        !hasToolProtocolParts(message) &&
+        !isMessageDropped(message)
+    );
+}
+
 function mergeNudgeText(text: string, currentNudgeText: string, nextNudgeText: string): string {
     const withoutCurrentNudge = stripTrailingExactNudge(text, currentNudgeText);
     const withoutManagedNudges = stripTrailingContextNudges(withoutCurrentNudge);
@@ -56,9 +70,11 @@ export function reinjectNudgeAtAnchor(
         if (message.info.id !== placement.messageId) continue;
         if (message.info.role !== "assistant") continue;
         if (isMessageDropped(message)) {
+            nudgePlacements.clear(sessionId);
             return false;
         }
         if (hasToolProtocolParts(message)) {
+            nudgePlacements.clear(sessionId);
             return false;
         }
 
@@ -102,7 +118,12 @@ export function appendNudgeToAssistant(
             const part = message.parts[j];
             if (isTextPart(part)) {
                 const nextText = mergeNudgeText(part.text, nudge, nudge);
-                if (nextText === part.text) return;
+                if (nextText === part.text) {
+                    if (message.info.id) {
+                        nudgePlacements.set(sessionId, message.info.id, nudge);
+                    }
+                    return;
+                }
                 part.text = nextText;
                 if (message.info.id) {
                     nudgePlacements.set(sessionId, message.info.id, nudge);
@@ -131,4 +152,51 @@ export function appendNudgeToAssistant(
         sessionId,
         `nudge placement failed: no suitable assistant message found (${messages.length} messages)`,
     );
+}
+
+export function appendSupplementalNudgeToAssistant(
+    messages: MessageLike[],
+    nudge: string,
+    nudgePlacements: NudgePlacementStore,
+    sessionId: string,
+): boolean {
+    const appendToMessage = (message: MessageLike): boolean => {
+        if (!isAppendableAssistantMessage(message)) return false;
+
+        for (let j = message.parts.length - 1; j >= 0; j--) {
+            const part = message.parts[j];
+            if (isTextPart(part)) {
+                const nextText = `${stripTrailingDeferredNotes(part.text)}${nudge}`;
+                if (nextText !== part.text) {
+                    part.text = nextText;
+                }
+                return true;
+            }
+        }
+
+        message.parts.push({ type: "text", text: nudge } as MessageLike["parts"][number]);
+        return true;
+    };
+
+    const placement = nudgePlacements.get(sessionId);
+    if (!placement) return false;
+
+    for (const message of messages) {
+        if (message.info.id !== placement.messageId) continue;
+        return appendToMessage(message);
+    }
+
+    return false;
+}
+
+export function canAppendSupplementalNudgeToAssistant(
+    messages: MessageLike[],
+    nudgePlacements: NudgePlacementStore,
+    sessionId: string,
+): boolean {
+    const placement = nudgePlacements.get(sessionId);
+    if (!placement) return false;
+
+    const anchoredMessage = messages.find((message) => message.info.id === placement.messageId);
+    return anchoredMessage ? isAppendableAssistantMessage(anchoredMessage) : false;
 }

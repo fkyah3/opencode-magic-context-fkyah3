@@ -1,7 +1,11 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, it } from "bun:test";
-import { appendNudgeToAssistant, reinjectNudgeAtAnchor } from "./nudge-injection";
+import {
+    appendNudgeToAssistant,
+    appendSupplementalNudgeToAssistant,
+    reinjectNudgeAtAnchor,
+} from "./nudge-injection";
 import { createNudgePlacementStore } from "./nudge-placement-store";
 
 describe("nudge-injection", () => {
@@ -116,5 +120,44 @@ describe("nudge-injection", () => {
 
         expect(reinjected).toBe(false);
         expect(nudgePlacements.get("ses-1")).toBeNull();
+    });
+
+    it("appends deferred note nudges to the existing anchored assistant message", () => {
+        const nudgePlacements = createNudgePlacementStore();
+        const messages = [
+            {
+                info: { id: "m-assistant", role: "assistant" },
+                parts: [
+                    {
+                        type: "text",
+                        text: [
+                            "assistant response",
+                            "",
+                            '<instruction name="context_warning">warning</instruction>',
+                        ].join("\n"),
+                    },
+                ],
+            },
+        ];
+
+        appendNudgeToAssistant(
+            messages,
+            '\n\n<instruction name="context_warning">warning</instruction>',
+            nudgePlacements,
+            "ses-1",
+        );
+
+        const appended = appendSupplementalNudgeToAssistant(
+            messages,
+            '\n\n<instruction name="deferred_notes">deferred</instruction>',
+            nudgePlacements,
+            "ses-1",
+        );
+
+        expect(appended).toBe(true);
+        const text = (messages[0].parts[0] as { text: string }).text;
+        expect(text).toContain("warning");
+        expect(text).toContain("deferred");
+        expect(text.match(/<instruction name="(?:context_|deferred_notes)/g)?.length).toBe(2);
     });
 });

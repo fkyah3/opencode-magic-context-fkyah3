@@ -18,6 +18,10 @@ import {
     type PreparedCompartmentInjection,
     renderCompartmentInjection,
 } from "./inject-compartments";
+import {
+    appendSupplementalNudgeToAssistant,
+    canAppendSupplementalNudgeToAssistant,
+} from "./nudge-injection";
 import type { NudgePlacementStore } from "./nudge-placement-store";
 import type { ContextNudge } from "./nudger";
 import {
@@ -27,6 +31,7 @@ import {
     stripInlineThinking,
     stripSystemInjectedMessages,
 } from "./strip-content";
+import { getNotNudgeText } from "./note-nudger";
 import {
     appendReminderToUserMessageById,
     appendReminderToLatestUserMessage,
@@ -342,6 +347,21 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
             logTransformTiming(args.sessionId, "applyContextNudge", t9);
         } else {
             args.nudgePlacements.clear(args.sessionId);
+        }
+
+        const canInjectDeferredNoteNudge = canAppendSupplementalNudgeToAssistant(
+            args.messages,
+            args.nudgePlacements,
+            args.sessionId,
+        );
+        const deferredNoteText = getNotNudgeText(args.db, args.sessionId);
+        if (deferredNoteText && canInjectDeferredNoteNudge) {
+            appendSupplementalNudgeToAssistant(
+                args.messages,
+                `\n\n<instruction name="deferred_notes">${deferredNoteText}</instruction>`,
+                args.nudgePlacements,
+                args.sessionId,
+            );
         }
     } else {
         args.nudgePlacements.clear(args.sessionId);

@@ -43,6 +43,8 @@ export interface TagMessagesResult {
     toolCallIndex: ToolCallIndex;
     batch: ToolMutationBatch;
     hasRecentReduceCall: boolean;
+    /** Whether recent assistant messages contain git commit hash patterns */
+    hasRecentCommit: boolean;
 }
 
 function collectRelevantSourceTagIds(
@@ -89,6 +91,9 @@ export function tagMessages(
     let precedingThinkingParts: ThinkingLikePart[] = [];
     let lastReduceMessageIndex = -1;
     const RECENT_REDUCE_LOOKBACK = 10;
+    const COMMIT_LOOKBACK = 5;
+    const COMMIT_HASH_PATTERN = /\b[0-9a-f]{7,12}\b/;
+    let commitDetected = false;
 
     db.transaction(() => {
         for (let msgIndex = 0; msgIndex < messages.length; msgIndex++) {
@@ -266,6 +271,26 @@ export function tagMessages(
             if (message.info.role === "assistant" && !messageHasTextPart) {
                 precedingThinkingParts = messageThinkingParts;
             }
+
+            // Detect commit hashes in recent assistant text (last COMMIT_LOOKBACK messages)
+            if (
+                !commitDetected &&
+                message.info.role === "assistant" &&
+                messages.length - msgIndex <= COMMIT_LOOKBACK
+            ) {
+                for (const part of message.parts) {
+                    if (isTextPart(part)) {
+                        const text = (part as { text: string }).text;
+                        if (
+                            COMMIT_HASH_PATTERN.test(text) &&
+                            /\b(commit|committed|cherry-pick|merge|rebas)/i.test(text)
+                        ) {
+                            commitDetected = true;
+                            break;
+                        }
+                    }
+                }
+            }
         }
     })();
 
@@ -285,5 +310,6 @@ export function tagMessages(
         toolCallIndex,
         batch,
         hasRecentReduceCall,
+        hasRecentCommit: commitDetected,
     };
 }
