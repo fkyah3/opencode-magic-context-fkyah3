@@ -1,7 +1,12 @@
 import type { Database } from "bun:sqlite";
 import type { DreamingConfig } from "../../config/schema/magic-context";
-import { runDream, type DreamRunResult } from "../../features/magic-context/dreamer";
-import { log, sessionLog } from "../../shared";
+import {
+    enqueueDream,
+    ensureDreamQueueTable,
+    processDreamQueue,
+    type DreamRunResult,
+} from "../../features/magic-context/dreamer";
+import { sessionLog } from "../../shared";
 import { runSidekick } from "../../features/magic-context/sidekick/agent";
 import type { SidekickConfig } from "../../features/magic-context/sidekick/types";
 import { executeFlush } from "./execute-flush";
@@ -132,7 +137,7 @@ async function executeDreaming(
             projectPath: string;
             client: unknown;
             directory: string;
-            executeDream?: (sessionId: string) => Promise<DreamRunResult>;
+            executeDream?: (sessionId: string) => Promise<DreamRunResult | null>;
         };
     },
     sessionId: string,
@@ -146,22 +151,32 @@ async function executeDreaming(
         throw new Error(`${SENTINEL_PREFIX}CTX-DREAM_HANDLED__`);
     }
 
+    ensureDreamQueueTable(deps.db);
+    const entry = enqueueDream(deps.db, deps.dreaming.projectPath, "manual");
+    if (!entry) {
+        await deps.sendNotification(sessionId, "Dream already queued for this project", {});
+        throw new Error(`${SENTINEL_PREFIX}CTX-DREAM_HANDLED__`);
+    }
+
     await deps.sendNotification(sessionId, "Starting dream run...", {});
 
     const result = deps.dreaming.executeDream
         ? await deps.dreaming.executeDream(sessionId)
-        : await runDream({
+        : await processDreamQueue({
               db: deps.db,
               client: deps.dreaming.client as never,
-              projectPath: deps.dreaming.projectPath,
               tasks: deps.dreaming.config.tasks,
               taskTimeoutMinutes: deps.dreaming.config.task_timeout_minutes,
               maxRuntimeMinutes: deps.dreaming.config.max_runtime_minutes,
-              parentSessionId: sessionId,
-              sessionDirectory: deps.dreaming.directory,
           });
 
-    await deps.sendNotification(sessionId, summarizeDreamResult(result), {});
+    await deps.sendNotification(
+        sessionId,
+        result
+            ? summarizeDreamResult(result)
+            : "Dream queued, but another worker is already processing the queue.",
+        {},
+    );
     throw new Error(`${SENTINEL_PREFIX}CTX-DREAM_HANDLED__`);
 }
 
@@ -190,7 +205,7 @@ export function createMagicContextCommandHandler(deps: {
         projectPath: string;
         client: unknown;
         directory: string;
-        executeDream?: (sessionId: string) => Promise<DreamRunResult>;
+        executeDream?: (sessionId: string) => Promise<DreamRunResult | null>;
     };
 }) {
     const isStatusCommand = (command: string): boolean => command === "ctx-status";

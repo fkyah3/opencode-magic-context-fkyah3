@@ -137,6 +137,15 @@ function makeOutput(text: string) {
     return { parts: [{ type: "text", text }] };
 }
 
+async function expectSentinel(promise: Promise<unknown>, sentinel: string): Promise<void> {
+    try {
+        await promise;
+        throw new Error(`Expected sentinel ${sentinel}`);
+    } catch (error) {
+        expect(String(error)).toContain(sentinel);
+    }
+}
+
 describe("createMagicContextCommandHandler", () => {
     let db: Database;
 
@@ -170,13 +179,14 @@ describe("createMagicContextCommandHandler", () => {
                 sendNotification,
             });
 
-            await expect(
+            await expectSentinel(
                 handler["command.execute.before"](
                     { command: "ctx-flush", sessionID: "ses-empty", arguments: "" },
                     makeOutput(""),
                     {},
                 ),
-            ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__");
+                "__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__",
+            );
 
             expect(sendNotification).toHaveBeenCalledWith(
                 "ses-empty",
@@ -200,13 +210,14 @@ describe("createMagicContextCommandHandler", () => {
                 sendNotification,
             });
 
-            await expect(
+            await expectSentinel(
                 handler["command.execute.before"](
                     { command: "ctx-flush", sessionID: "ses-flush", arguments: "" },
                     makeOutput(""),
                     {},
                 ),
-            ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__");
+                "__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__",
+            );
 
             expect(sendNotification).toHaveBeenCalledWith(
                 "ses-flush",
@@ -238,13 +249,14 @@ describe("createMagicContextCommandHandler", () => {
                 sendNotification,
             });
 
-            await expect(
+            await expectSentinel(
                 handler["command.execute.before"](
                     { command: "ctx-status", sessionID: "ses-status", arguments: "" },
                     makeOutput(""),
                     {},
                 ),
-            ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__");
+                "__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__",
+            );
 
             const calls = sendNotification.mock.calls as unknown as Array<
                 [string, string, unknown]
@@ -273,13 +285,14 @@ describe("createMagicContextCommandHandler", () => {
                 sendNotification,
             });
 
-            await expect(
+            await expectSentinel(
                 handler["command.execute.before"](
                     { command: "ctx-status", sessionID: "ses-status-ops", arguments: "" },
                     makeOutput(""),
                     {},
                 ),
-            ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__");
+                "__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__",
+            );
 
             const calls = sendNotification.mock.calls as unknown as Array<
                 [string, string, unknown]
@@ -298,13 +311,14 @@ describe("createMagicContextCommandHandler", () => {
                 sendNotification,
             });
 
-            await expect(
+            await expectSentinel(
                 handler["command.execute.before"](
                     { command: "ctx-status", sessionID: "ses-empty-status", arguments: "" },
                     makeOutput(""),
                     {},
                 ),
-            ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__");
+                "__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__",
+            );
 
             const calls = sendNotification.mock.calls as unknown as Array<
                 [string, string, unknown]
@@ -328,13 +342,14 @@ describe("createMagicContextCommandHandler", () => {
                 sendNotification,
             });
 
-            await expect(
+            await expectSentinel(
                 handler["command.execute.before"](
                     { command: "ctx-recomp", sessionID: "ses-recomp", arguments: "" },
                     makeOutput(""),
                     {},
                 ),
-            ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-RECOMP_HANDLED__");
+                "__CONTEXT_MANAGEMENT_CTX-RECOMP_HANDLED__",
+            );
 
             expect(executeRecomp).toHaveBeenCalledWith("ses-recomp");
             expect(sendNotification).toHaveBeenCalledTimes(2);
@@ -387,13 +402,14 @@ describe("createMagicContextCommandHandler", () => {
                 },
             });
 
-            await expect(
+            await expectSentinel(
                 handler["command.execute.before"](
                     { command: "ctx-dream", sessionID: "ses-dream", arguments: "" },
                     makeOutput(""),
                     {},
                 ),
-            ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-DREAM_HANDLED__");
+                "__CONTEXT_MANAGEMENT_CTX-DREAM_HANDLED__",
+            );
 
             expect(executeDream).toHaveBeenCalledWith("ses-dream");
             expect(sendNotification).toHaveBeenNthCalledWith(
@@ -408,6 +424,55 @@ describe("createMagicContextCommandHandler", () => {
                 expect.stringContaining("### Tasks"),
                 {},
             );
+        });
+
+        it("notifies when the project is already queued", async () => {
+            const sendNotification = mock(async () => {});
+            const executeDream = mock(async () => null);
+            const handler = createMagicContextCommandHandler({
+                db,
+                protectedTags: 3,
+                sendNotification,
+                dreaming: {
+                    config: {
+                        enabled: true,
+                        schedule: "02:00-06:00",
+                        max_runtime_minutes: 60,
+                        tasks: ["consolidate"],
+                        task_timeout_minutes: 10,
+                    },
+                    projectPath: "/repo/project",
+                    client: {},
+                    directory: "/repo/project",
+                    executeDream,
+                },
+            });
+
+            await expectSentinel(
+                handler["command.execute.before"](
+                    { command: "ctx-dream", sessionID: "ses-dream", arguments: "" },
+                    makeOutput(""),
+                    {},
+                ),
+                "__CONTEXT_MANAGEMENT_CTX-DREAM_HANDLED__",
+            );
+
+            await expectSentinel(
+                handler["command.execute.before"](
+                    { command: "ctx-dream", sessionID: "ses-dream", arguments: "" },
+                    makeOutput(""),
+                    {},
+                ),
+                "__CONTEXT_MANAGEMENT_CTX-DREAM_HANDLED__",
+            );
+
+            expect(sendNotification).toHaveBeenNthCalledWith(
+                3,
+                "ses-dream",
+                "Dream already queued for this project",
+                {},
+            );
+            expect(executeDream).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -427,21 +492,23 @@ describe("createMagicContextCommandHandler", () => {
             sendNotification: sendNotificationStatus,
         });
 
-        await expect(
+        await expectSentinel(
             handlerFlush["command.execute.before"](
                 { command: "ctx-flush", sessionID: "ses-both", arguments: "" },
                 makeOutput(""),
                 {},
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__",
+        );
 
-        await expect(
+        await expectSentinel(
             handlerStatus["command.execute.before"](
                 { command: "ctx-status", sessionID: "ses-both", arguments: "" },
                 makeOutput(""),
                 {},
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__",
+        );
 
         const flushCalls = sendNotificationFlush.mock.calls as unknown as Array<
             [string, string, unknown]
@@ -463,13 +530,14 @@ describe("createMagicContextCommandHandler", () => {
             sendNotification,
         });
 
-        await expect(
+        await expectSentinel(
             handler["command.execute.before"](
                 { command: "ctx-flush", sessionID: "ses-notify", arguments: "" },
                 makeOutput(""),
                 {},
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__",
+        );
 
         expect(sendNotification).toHaveBeenCalledTimes(1);
         expect(sendNotification).toHaveBeenCalledWith(
@@ -487,7 +555,7 @@ describe("createMagicContextCommandHandler", () => {
             sendNotification,
         });
 
-        await expect(
+        await expectSentinel(
             handler["command.execute.before"](
                 { command: "ctx-status", sessionID: "ses-stable-model", arguments: "" },
                 makeOutput(""),
@@ -498,7 +566,8 @@ describe("createMagicContextCommandHandler", () => {
                     modelId: "claude-sonnet-4-6",
                 },
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__",
+        );
 
         expect(sendNotification).toHaveBeenCalledWith(
             "ses-stable-model",

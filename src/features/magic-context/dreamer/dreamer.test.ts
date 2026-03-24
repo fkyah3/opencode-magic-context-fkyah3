@@ -9,7 +9,8 @@ const { initializeDatabase } = await import("../storage-db");
 const { acquireLease, getLeaseHolder, isLeaseActive, releaseLease, renewLease } = await import(
     "./lease"
 );
-const { runDream } = await import("./runner");
+const { ensureDreamQueueTable, enqueueDream } = await import("./queue");
+const { processDreamQueue, registerDreamProjectDirectory, runDream } = await import("./runner");
 const { getDreamState } = await import("./storage-dream-state");
 
 let db: Database | null = null;
@@ -138,6 +139,29 @@ describe("dreamer", () => {
             expect(isLeaseActive(db)).toBe(false);
             expect(createdSessionIds).toEqual(["dream-1", "dream-2"]);
             expect(deletedSessionIds).toEqual(["dream-1", "dream-2"]);
+        });
+
+        it("processes the next queued dream and removes the queue entry", async () => {
+            db = createTestDb();
+            ensureDreamQueueTable(db);
+            registerDreamProjectDirectory("git:repo-1", "/repo/project");
+            const client = createDreamClient();
+
+            expect(enqueueDream(db, "git:repo-1", "manual")).not.toBeNull();
+
+            const result = await processDreamQueue({
+                db,
+                client,
+                tasks: ["consolidate"],
+                taskTimeoutMinutes: 5,
+                maxRuntimeMinutes: 10,
+            });
+
+            expect(result?.tasks.map((task) => task.name)).toEqual(["consolidate"]);
+            const row = db
+                .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM dream_queue")
+                .get();
+            expect(row?.count).toBe(0);
         });
     });
 });

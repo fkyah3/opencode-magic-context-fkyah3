@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveProjectIdentity } from "../../features/magic-context/memory/project-identity";
 import type { Scheduler } from "../../features/magic-context/scheduler";
-import { closeDatabase } from "../../features/magic-context/storage";
+import { closeDatabase, openDatabase } from "../../features/magic-context/storage";
 import type { Tagger } from "../../features/magic-context/tagger";
 import { createMagicContextHook, type MagicContextDeps } from "./hook";
 
@@ -103,6 +104,21 @@ function requireHook(
     return hook!;
 }
 
+async function expectSentinel(promise: Promise<unknown>, sentinel: string): Promise<void> {
+    try {
+        await promise;
+        throw new Error(`Expected sentinel ${sentinel}`);
+    } catch (error) {
+        expect(String(error)).toContain(sentinel);
+    }
+}
+
+function formatHm(date: Date): string {
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+}
+
 describe("magic-context hook", () => {
     it("returns the expected hook keys", () => {
         process.env.XDG_DATA_HOME = makeTempDir("hook-test-");
@@ -123,6 +139,20 @@ describe("magic-context hook", () => {
         expect(typeof hook.event).toBe("function");
         expect(typeof hook["command.execute.before"]).toBe("function");
         expect(typeof hook["tool.execute.after"]).toBe("function");
+    });
+
+    it("initializes the dream queue table during setup", () => {
+        process.env.XDG_DATA_HOME = makeTempDir("hook-dream-queue-init-");
+        requireHook(createMagicContextHook(createMockDeps()));
+        const db = openDatabase();
+
+        const table = db
+            .query<{ name: string }, []>(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'dream_queue'",
+            )
+            .get();
+
+        expect(table?.name).toBe("dream_queue");
     });
 
     it("disables magic-context and warns when persistent storage is unavailable", () => {
@@ -149,12 +179,13 @@ describe("magic-context hook", () => {
         const promptMocks = createPromptMocks();
         const hook = requireHook(createMagicContextHook(createMockDeps(promptMocks)));
 
-        await expect(
+        await expectSentinel(
             hook["command.execute.before"]!(
                 { command: "ctx-status", sessionID: "ses-status", arguments: "" },
                 { parts: [{ type: "text", text: "" }] },
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__",
+        );
 
         expect(promptMocks.prompt).toHaveBeenCalledTimes(1);
         const callArg = promptMocks.prompt?.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -201,12 +232,13 @@ describe("magic-context hook", () => {
             },
         });
 
-        await expect(
+        await expectSentinel(
             hook["command.execute.before"]!(
                 { command: "ctx-status", sessionID: "ses-status-async", arguments: "" },
                 { parts: [{ type: "text", text: "" }] },
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__",
+        );
 
         expect(promptMocks.prompt).toBeUndefined();
         expect(promptMocks.promptAsync).toHaveBeenCalledTimes(1);
@@ -222,7 +254,7 @@ describe("magic-context hook", () => {
         const promptMocks = createPromptMocks();
         const hook = requireHook(createMagicContextHook(createMockDeps(promptMocks)));
 
-        await expect(
+        await expectSentinel(
             hook["command.execute.before"]!(
                 {
                     command: "ctx-status",
@@ -235,7 +267,8 @@ describe("magic-context hook", () => {
                 },
                 { parts: [{ type: "text", text: "" }] },
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-STATUS_HANDLED__",
+        );
 
         const callArg = promptMocks.prompt?.mock.calls[0]?.[0] as {
             body?: Record<string, unknown>;
@@ -251,12 +284,13 @@ describe("magic-context hook", () => {
         const promptMocks = createPromptMocks();
         const hook = requireHook(createMagicContextHook(createMockDeps(promptMocks)));
 
-        await expect(
+        await expectSentinel(
             hook["command.execute.before"]!(
                 { command: "ctx-flush", sessionID: "ses-flush", arguments: "" },
                 { parts: [{ type: "text", text: "" }] },
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-FLUSH_HANDLED__",
+        );
 
         expect(promptMocks.prompt).toHaveBeenCalledTimes(1);
         const callArg = promptMocks.prompt?.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -293,12 +327,13 @@ describe("magic-context hook", () => {
         };
         const hook = requireHook(createMagicContextHook(deps));
 
-        await expect(
+        await expectSentinel(
             hook["command.execute.before"]!(
                 { command: "ctx-dream", sessionID: "ses-dream", arguments: "" },
                 { parts: [{ type: "text", text: "" }] },
             ),
-        ).rejects.toThrow("__CONTEXT_MANAGEMENT_CTX-DREAM_HANDLED__");
+            "__CONTEXT_MANAGEMENT_CTX-DREAM_HANDLED__",
+        );
 
         expect(promptMocks.prompt).toHaveBeenCalledTimes(3);
         expect(promptMocks.createSession).toHaveBeenCalledTimes(1);
@@ -321,12 +356,17 @@ describe("magic-context hook", () => {
         expect(secondCallArg).toEqual(
             expect.objectContaining({
                 path: { id: "dream-child" },
+                query: { directory: "/tmp" },
                 body: expect.objectContaining({
-                    parts: [
+                    agent: "dreamer",
+                    system: expect.stringContaining("memory maintenance agent"),
+                    parts: expect.arrayContaining([
                         expect.objectContaining({
-                            text: expect.stringContaining("Goal: load all active memories"),
+                            text: expect.stringContaining(
+                                "## Task: Consolidate Duplicate Memories",
+                            ),
                         }),
-                    ],
+                    ]),
                 }),
             }),
         );
@@ -342,6 +382,87 @@ describe("magic-context hook", () => {
                 }),
             }),
         );
+    });
+
+    it("checks the dream schedule in the background after message updates", async () => {
+        process.env.XDG_DATA_HOME = makeTempDir("hook-dream-schedule-");
+        const promptMocks = createPromptMocks();
+        const deps = createMockDeps(promptMocks);
+        deps.directory = "/repo/project";
+        const nowForSchedule = new Date();
+        const scheduleStart = new Date(nowForSchedule.getTime() - 60_000);
+        const scheduleEnd = new Date(nowForSchedule.getTime() + 60_000);
+        deps.config = {
+            ...deps.config,
+            dreaming: {
+                enabled: true,
+                schedule: `${formatHm(scheduleStart)}-${formatHm(scheduleEnd)}`,
+                max_runtime_minutes: 60,
+                tasks: ["consolidate"],
+                task_timeout_minutes: 10,
+            },
+        };
+        const originalDateNow = Date.now;
+        Date.now = () => originalDateNow() + 2 * 60 * 60 * 1000;
+
+        try {
+            const hook = requireHook(createMagicContextHook(deps));
+            const db = openDatabase();
+            const projectPath = resolveProjectIdentity("/repo/project");
+            const now = Date.now();
+
+            db.prepare(
+                "INSERT INTO memories (project_path, category, content, normalized_hash, source_session_id, source_type, seen_count, retrieval_count, first_seen_at, created_at, updated_at, last_seen_at, last_retrieved_at, status, expires_at, verification_status, verified_at, superseded_by_memory_id, merged_from, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ).run(
+                projectPath,
+                "ARCHITECTURE_DECISIONS",
+                "Dream me",
+                "dream-me",
+                "ses-seed",
+                "historian",
+                1,
+                0,
+                now,
+                now,
+                now,
+                now,
+                null,
+                "active",
+                null,
+                "unverified",
+                null,
+                null,
+                null,
+                null,
+            );
+
+            await hook.event!({
+                event: {
+                    type: "message.updated",
+                    properties: {
+                        info: {
+                            role: "assistant",
+                            finish: "stop",
+                            sessionID: "ses-dream-schedule",
+                            providerID: "openai",
+                            modelID: "gpt-4o",
+                            tokens: {
+                                input: 10,
+                                output: 10,
+                                cache: { read: 0, write: 0 },
+                            },
+                        },
+                    },
+                },
+            });
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect(promptMocks.createSession).toHaveBeenCalledTimes(1);
+            expect(promptMocks.deleteSession).toHaveBeenCalledTimes(1);
+        } finally {
+            Date.now = originalDateNow;
+        }
     });
 
     it("sends the 80% emergency nudge with the current live model and variant via promptAsync", async () => {

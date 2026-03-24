@@ -4,6 +4,12 @@ import {
     DEFAULT_NUDGE_INTERVAL_TOKENS,
     type DreamingConfig,
 } from "../../config/schema/magic-context";
+import {
+    checkScheduleAndEnqueue,
+    ensureDreamQueueTable,
+    processDreamQueue,
+    registerDreamProjectDirectory,
+} from "../../features/magic-context/dreamer";
 import type { createCompactionHandler } from "../../features/magic-context/compaction";
 import { resolveProjectIdentity } from "../../features/magic-context/memory/project-identity";
 import type { Scheduler } from "../../features/magic-context/scheduler";
@@ -35,6 +41,9 @@ import {
 } from "./hook-handlers";
 import { sendIgnoredMessage } from "./send-session-notification";
 import { createSystemPromptHashHandler } from "./system-prompt-hash";
+
+const DREAM_SCHEDULE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+let lastScheduleCheckMs = 0;
 
 export interface MagicContextDeps {
     client: PluginContext["client"];
@@ -130,6 +139,10 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         return null;
     }
 
+    ensureDreamQueueTable(db);
+    const projectPath = resolveProjectIdentity(deps.directory);
+    registerDreamProjectDirectory(projectPath, deps.directory);
+
     const nudgePlacements = createNudgePlacementStore(db);
     const pendingSidekickResults = new Map<string, string>();
     const flushedSessions = new Set<string>();
@@ -187,6 +200,36 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         client: deps.client,
     });
 
+    const runDreamQueueInBackground = (): void => {
+        const dreaming = deps.config.dreaming;
+        if (!dreaming?.enabled || !dreaming.schedule?.trim()) {
+            return;
+        }
+
+        const now = Date.now();
+        if (now - lastScheduleCheckMs < DREAM_SCHEDULE_CHECK_INTERVAL_MS) {
+            return;
+        }
+
+        lastScheduleCheckMs = now;
+        try {
+            checkScheduleAndEnqueue(db, dreaming.schedule);
+        } catch (error) {
+            log("[dreamer] scheduled enqueue check failed:", error);
+            return;
+        }
+
+        void processDreamQueue({
+            db,
+            client: deps.client,
+            tasks: dreaming.tasks,
+            taskTimeoutMinutes: dreaming.task_timeout_minutes,
+            maxRuntimeMinutes: dreaming.max_runtime_minutes,
+        }).catch((error: unknown) => {
+            log("[dreamer] scheduled queue processing failed:", error);
+        });
+    };
+
     const commandHandler = createMagicContextCommandHandler({
         db,
         protectedTags: deps.config.protected_tags,
@@ -220,7 +263,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         sidekick: deps.config.sidekick?.enabled
             ? {
                   config: deps.config.sidekick,
-                  projectPath: resolveProjectIdentity(deps.directory),
+                  projectPath,
                   client: deps.client,
                   pendingResults: pendingSidekickResults,
               }
@@ -228,7 +271,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         dreaming: deps.config.dreaming
             ? {
                   config: deps.config.dreaming,
-                  projectPath: resolveProjectIdentity(deps.directory),
+                  projectPath,
                   client: deps.client,
                   directory: deps.directory,
               }
@@ -244,6 +287,22 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         lastHeuristicsTurnId,
     });
 
+    const eventHook = createEventHook({
+        eventHandler,
+        contextUsageMap,
+        db,
+        liveModelBySession,
+        variantBySession,
+        recentReduceBySession,
+        toolUsageSinceUserTurn,
+        emergencyNudgeFired,
+        flushedSessions,
+        lastHeuristicsTurnId,
+        commitSeenLastPass,
+        client: deps.client,
+        protectedTags: deps.config.protected_tags,
+    });
+
     return {
         "experimental.chat.messages.transform": transform,
         "experimental.chat.system.transform": systemPromptHashHandler,
@@ -256,21 +315,12 @@ export function createMagicContextHook(deps: MagicContextDeps) {
             flushedSessions,
             lastHeuristicsTurnId,
         }),
-        event: createEventHook({
-            eventHandler,
-            contextUsageMap,
-            db,
-            liveModelBySession,
-            variantBySession,
-            recentReduceBySession,
-            toolUsageSinceUserTurn,
-            emergencyNudgeFired,
-            flushedSessions,
-            lastHeuristicsTurnId,
-            commitSeenLastPass,
-            client: deps.client,
-            protectedTags: deps.config.protected_tags,
-        }),
+        event: async (input: { event: { type: string; properties?: unknown } }) => {
+            await eventHook(input);
+            if (input.event.type === "message.updated") {
+                runDreamQueueInBackground();
+            }
+        },
         "command.execute.before": createCommandExecuteBeforeHook(commandHandler),
         "tool.execute.after": createToolExecuteAfterHook({
             recentReduceBySession,

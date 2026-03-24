@@ -9,8 +9,19 @@ import { getErrorMessage } from "../../../shared/error-message";
 import { log } from "../../../shared/logger";
 import { extractLatestAssistantText } from "../../../tools/look-at/assistant-message-extractor";
 import { acquireLease, getLeaseHolder, releaseLease, renewLease } from "./lease";
-import { buildDreamTaskPrompt, DREAMER_SYSTEM_PROMPT } from "./task-prompts";
+import { clearStaleEntries, dequeueNext, removeDreamEntry } from "./queue";
 import { getDreamState, setDreamState } from "./storage-dream-state";
+import { buildDreamTaskPrompt, DREAMER_SYSTEM_PROMPT } from "./task-prompts";
+
+const dreamProjectDirectories = new Map<string, string>();
+
+export function registerDreamProjectDirectory(projectPath: string, directory: string): void {
+    dreamProjectDirectories.set(projectPath, directory);
+}
+
+function resolveDreamSessionDirectory(projectPath: string): string {
+    return dreamProjectDirectories.get(projectPath) ?? projectPath;
+}
 
 export interface DreamRunResult {
     startedAt: number;
@@ -161,4 +172,35 @@ export async function runDream(args: {
     result.finishedAt = Date.now();
     setDreamState(args.db, "last_dream_at", String(result.finishedAt));
     return result;
+}
+
+export async function processDreamQueue(args: {
+    db: Database;
+    client: PluginContext["client"];
+    tasks: DreamingTask[];
+    taskTimeoutMinutes: number;
+    maxRuntimeMinutes: number;
+}): Promise<DreamRunResult | null> {
+    clearStaleEntries(args.db, 2 * 60 * 60 * 1000);
+
+    const entry = dequeueNext(args.db);
+    if (!entry) {
+        return null;
+    }
+
+    const projectDirectory = resolveDreamSessionDirectory(entry.projectPath);
+
+    try {
+        return await runDream({
+            db: args.db,
+            client: args.client,
+            projectPath: projectDirectory,
+            tasks: args.tasks,
+            taskTimeoutMinutes: args.taskTimeoutMinutes,
+            maxRuntimeMinutes: args.maxRuntimeMinutes,
+            sessionDirectory: projectDirectory,
+        });
+    } finally {
+        removeDreamEntry(args.db, entry.id);
+    }
 }

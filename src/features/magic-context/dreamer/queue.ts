@@ -1,0 +1,106 @@
+import type { Database } from "bun:sqlite";
+
+export interface DreamQueueEntry {
+    id: number;
+    projectPath: string;
+    reason: string;
+    enqueuedAt: number;
+    startedAt: number | null;
+}
+
+export function ensureDreamQueueTable(db: Database): void {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS dream_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_path TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            enqueued_at INTEGER NOT NULL,
+            started_at INTEGER
+        )
+    `);
+    db.run("CREATE INDEX IF NOT EXISTS idx_dream_queue_project ON dream_queue(project_path)");
+}
+
+/** Enqueue a project for dreaming. Skips if the same project is already queued and not started. */
+export function enqueueDream(
+    db: Database,
+    projectPath: string,
+    reason: string,
+): DreamQueueEntry | null {
+    const existing = db
+        .query<{ id: number }, [string]>(
+            "SELECT id FROM dream_queue WHERE project_path = ? AND started_at IS NULL",
+        )
+        .get(projectPath);
+
+    if (existing) {
+        return null; // already queued
+    }
+
+    const now = Date.now();
+    const result = db
+        .prepare("INSERT INTO dream_queue (project_path, reason, enqueued_at) VALUES (?, ?, ?)")
+        .run(projectPath, reason, now);
+
+    return {
+        id: Number(result.lastInsertRowid),
+        projectPath,
+        reason,
+        enqueuedAt: now,
+        startedAt: null,
+    };
+}
+
+/** Peek at the next unstarted entry without claiming it. */
+export function peekQueue(db: Database): DreamQueueEntry | null {
+    const row = db
+        .query<{ id: number; project_path: string; reason: string; enqueued_at: number }, []>(
+            "SELECT id, project_path, reason, enqueued_at FROM dream_queue WHERE started_at IS NULL ORDER BY enqueued_at ASC LIMIT 1",
+        )
+        .get();
+
+    if (!row) return null;
+
+    return {
+        id: row.id,
+        projectPath: row.project_path,
+        reason: row.reason,
+        enqueuedAt: row.enqueued_at,
+        startedAt: null,
+    };
+}
+
+/** Claim the next unstarted entry by marking started_at. Returns null if queue is empty. */
+export function dequeueNext(db: Database): DreamQueueEntry | null {
+    const entry = peekQueue(db);
+    if (!entry) return null;
+
+    const now = Date.now();
+    db.prepare("UPDATE dream_queue SET started_at = ? WHERE id = ?").run(now, entry.id);
+
+    return { ...entry, startedAt: now };
+}
+
+/** Remove a completed or failed entry from the queue. */
+export function removeDreamEntry(db: Database, id: number): void {
+    db.prepare("DELETE FROM dream_queue WHERE id = ?").run(id);
+}
+
+/** Clear stale started entries (stuck for more than maxAgeMs). */
+export function clearStaleEntries(db: Database, maxAgeMs: number): number {
+    const cutoff = Date.now() - maxAgeMs;
+    const result = db
+        .prepare("DELETE FROM dream_queue WHERE started_at IS NOT NULL AND started_at < ?")
+        .run(cutoff);
+    return result.changes;
+}
+
+/** Get current queue size (unstarted entries only). */
+export function getQueueSize(db: Database): number {
+    const row = db
+        .query<{ count: number }, []>(
+            "SELECT COUNT(*) as count FROM dream_queue WHERE started_at IS NULL",
+        )
+        .get();
+    return row?.count ?? 0;
+}
