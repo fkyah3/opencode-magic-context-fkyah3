@@ -162,10 +162,10 @@ const AGENT_SECTIONS: Record<AgentType, string> = {
 const AGENT_SIGNATURES: [AgentType, string][] = [
     ["athena-junior", "Athena in non-interactive mode"],
     ["sisyphus-junior", "Sisyphus-Junior"],
-    ["sisyphus", "You are Sisyphus"],
+    ["sisyphus", '"Sisyphus"'],
     ["atlas", "You are Atlas"],
     ["hephaestus", "You are Hephaestus"],
-    ["oracle", "You are Oracle"],
+    ["oracle", "strategic technical advisor"],
     ["athena", "You are Athena"],
 ];
 
