@@ -153,9 +153,13 @@ const AGENT_SECTIONS: Record<AgentType, string> = {
     "athena-junior": ATHENA_SECTION,
 };
 
-/** Signature strings used to detect known agents from system prompt content. */
+/** Signature strings used to detect known agents from system prompt content.
+ *  Order matters — more specific signatures are checked first.
+ *  IMPORTANT: signatures must be unique to each agent's OWN prompt, not strings
+ *  that appear in other agents' delegation tables (e.g., "athena-junior" appears
+ *  in every agent's delegation list and must NOT be used as a signature). */
 const AGENT_SIGNATURES: [AgentType, string][] = [
-    ["athena-junior", "athena-junior"],
+    ["athena-junior", "Athena in non-interactive mode"],
     ["sisyphus-junior", "Sisyphus-Junior"],
     ["sisyphus", "You are Sisyphus"],
     ["atlas", "You are Atlas"],
