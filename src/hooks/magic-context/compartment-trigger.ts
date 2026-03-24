@@ -3,7 +3,7 @@ import { DEFAULT_COMPARTMENT_TOKEN_BUDGET } from "../../config/schema/magic-cont
 import { getLastCompartmentEndMessage } from "../../features/magic-context/compartment-storage";
 import { getPendingOps, getTagsBySession } from "../../features/magic-context/storage";
 import type { ContextUsage, SessionMeta } from "../../features/magic-context/types";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import {
     getProtectedTailStartOrdinal,
     getRawSessionMessageCount,
@@ -112,10 +112,7 @@ function getUnsummarizedTailInfo(
             commitClusterCount: chunk.commitClusterCount,
         };
     } catch (error) {
-        log(
-            `[magic-context] compartment trigger: raw tail inspection failed for ${sessionId}:`,
-            error,
-        );
+        sessionLog(sessionId, "compartment trigger: raw tail inspection failed:", error);
         return TAIL_INFO_DEFAULTS;
     }
 }
@@ -147,14 +144,16 @@ export function checkCompartmentTrigger(
             projectedPostDropPercentage !== null &&
             projectedPostDropPercentage <= relativePostDropTarget
         ) {
-            log(
-                `[magic-context] compartment trigger: skipping force-${FORCE_COMPARTMENT_PERCENTAGE} because projected post-drop usage is ${projectedPostDropPercentage.toFixed(1)}% (target ${relativePostDropTarget.toFixed(1)}%)`,
+            sessionLog(
+                sessionId,
+                `compartment trigger: skipping force-${FORCE_COMPARTMENT_PERCENTAGE} because projected post-drop usage is ${projectedPostDropPercentage.toFixed(1)}% (target ${relativePostDropTarget.toFixed(1)}%)`,
             );
             return { shouldFire: false };
         }
 
-        log(
-            `[magic-context] compartment trigger: force-firing at ${usage.percentage.toFixed(1)}% (projected post-drop ${projectedPostDropPercentage?.toFixed(1) ?? "none"}%)`,
+        sessionLog(
+            sessionId,
+            `compartment trigger: force-firing at ${usage.percentage.toFixed(1)}% (projected post-drop ${projectedPostDropPercentage?.toFixed(1) ?? "none"}%)`,
         );
         return { shouldFire: true, reason: "force_80" };
     }
@@ -164,16 +163,18 @@ export function checkCompartmentTrigger(
         tailInfo.commitClusterCount >= MIN_COMMIT_CLUSTERS_FOR_TRIGGER &&
         tailInfo.tokenEstimate >= compartmentTokenBudget
     ) {
-        log(
-            `[magic-context] compartment trigger: commit-cluster fire — ${tailInfo.commitClusterCount} clusters, ~${tailInfo.tokenEstimate} tokens in eligible prefix`,
+        sessionLog(
+            sessionId,
+            `compartment trigger: commit-cluster fire — ${tailInfo.commitClusterCount} clusters, ~${tailInfo.tokenEstimate} tokens in eligible prefix`,
         );
         return { shouldFire: true, reason: "commit_clusters" };
     }
 
     // Tail-size trigger: eligible prefix is very large regardless of pressure or commits
     if (tailInfo.tokenEstimate >= compartmentTokenBudget * TAIL_SIZE_TRIGGER_MULTIPLIER) {
-        log(
-            `[magic-context] compartment trigger: tail-size fire — ~${tailInfo.tokenEstimate} tokens exceeds ${compartmentTokenBudget * TAIL_SIZE_TRIGGER_MULTIPLIER} budget threshold`,
+        sessionLog(
+            sessionId,
+            `compartment trigger: tail-size fire — ~${tailInfo.tokenEstimate} tokens exceeds ${compartmentTokenBudget * TAIL_SIZE_TRIGGER_MULTIPLIER} budget threshold`,
         );
         return { shouldFire: true, reason: "tail_size" };
     }
@@ -190,21 +191,24 @@ export function checkCompartmentTrigger(
         projectedPostDropPercentage !== null &&
         projectedPostDropPercentage <= relativePostDropTarget
     ) {
-        log(
-            `[magic-context] compartment trigger: not firing at ${usage.percentage.toFixed(1)}% because projected post-drop usage is ${projectedPostDropPercentage.toFixed(1)}% (target ${relativePostDropTarget.toFixed(1)}%)`,
+        sessionLog(
+            sessionId,
+            `compartment trigger: not firing at ${usage.percentage.toFixed(1)}% because projected post-drop usage is ${projectedPostDropPercentage.toFixed(1)}% (target ${relativePostDropTarget.toFixed(1)}%)`,
         );
         return { shouldFire: false };
     }
 
     if (!tailInfo.isMeaningful) {
-        log(
-            `[magic-context] compartment trigger: not firing at ${usage.percentage.toFixed(1)}% because unsummarized tail from ${tailInfo.nextStartOrdinal} is too small`,
+        sessionLog(
+            sessionId,
+            `compartment trigger: not firing at ${usage.percentage.toFixed(1)}% because unsummarized tail from ${tailInfo.nextStartOrdinal} is too small`,
         );
         return { shouldFire: false };
     }
 
-    log(
-        `[magic-context] compartment trigger: proactive fire at ${usage.percentage.toFixed(1)}% (floor=${proactiveTriggerPercentage}% projected post-drop=${projectedPostDropPercentage?.toFixed(1) ?? "none"}% target=${relativePostDropTarget.toFixed(1)}%)`,
+    sessionLog(
+        sessionId,
+        `compartment trigger: proactive fire at ${usage.percentage.toFixed(1)}% (floor=${proactiveTriggerPercentage}% projected post-drop=${projectedPostDropPercentage?.toFixed(1) ?? "none"}% target=${relativePostDropTarget.toFixed(1)}%)`,
     );
     return { shouldFire: true, reason: "projected_headroom" };
 }

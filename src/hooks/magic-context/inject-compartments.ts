@@ -8,7 +8,7 @@ import {
 import { CATEGORY_PRIORITY } from "../../features/magic-context/memory/constants";
 import { getMemoriesByProject } from "../../features/magic-context/memory/storage-memory";
 import type { Memory, MemoryCategory } from "../../features/magic-context/memory/types";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import type { MessageLike } from "./tag-messages";
 
 export interface PreparedCompartmentInjection {
@@ -64,7 +64,11 @@ const CHARS_PER_TOKEN_ESTIMATE = 4;
  * Sort memories by priority (permanent first, then higher seen_count) and trim to budget.
  * Estimates ~4 chars per token for budget enforcement.
  */
-function trimMemoriesToBudget(memories: Memory[], budgetTokens: number): Memory[] {
+function trimMemoriesToBudget(
+    sessionId: string,
+    memories: Memory[],
+    budgetTokens: number,
+): Memory[] {
     const sorted = [...memories].sort((a, b) => {
         // Permanent memories first
         if (a.status === "permanent" && b.status !== "permanent") return -1;
@@ -87,8 +91,9 @@ function trimMemoriesToBudget(memories: Memory[], budgetTokens: number): Memory[
     }
 
     if (result.length < memories.length) {
-        log(
-            `[magic-context] trimmed memories from ${memories.length} to ${result.length} to fit injection budget of ${budgetTokens} tokens`,
+        sessionLog(
+            sessionId,
+            `trimmed memories from ${memories.length} to ${result.length} to fit injection budget of ${budgetTokens} tokens`,
         );
     }
 
@@ -126,7 +131,7 @@ export function prepareCompartmentInjection(
         } else {
             let memories = getMemoriesByProject(db, projectPath, ["active", "permanent"]);
             if (injectionBudgetTokens && memories.length > 0) {
-                memories = trimMemoriesToBudget(memories, injectionBudgetTokens);
+                memories = trimMemoriesToBudget(sessionId, memories, injectionBudgetTokens);
             }
             memoryCount = memories.length;
             memoryBlock = renderMemoryBlock(memories) ?? undefined;
@@ -144,10 +149,10 @@ export function prepareCompartmentInjection(
     const lastEndMessageId = lastCompartment.endMessageId;
 
     if (lastEndMessageId.length === 0) {
-        log(
-            "[magic-context] injecting legacy compartments without visible-prefix trimming because latest stored compartment has no end_message_id",
+        sessionLog(
+            sessionId,
+            "injecting legacy compartments without visible-prefix trimming because latest stored compartment has no end_message_id",
             {
-                sessionId,
                 compartmentCount: compartments.length,
                 compartmentEndMessage: lastEnd,
             },
@@ -198,8 +203,9 @@ export function renderCompartmentInjection(
     }
 
     const memoryLabel = prepared.memoryCount > 0 ? ` + ${prepared.memoryCount} memories` : "";
-    log(
-        `[magic-context] injected ${prepared.compartmentCount} compartments + ${prepared.factCount} facts${memoryLabel} into message[0]`,
+    sessionLog(
+        sessionId,
+        `injected ${prepared.compartmentCount} compartments + ${prepared.factCount} facts${memoryLabel} into message[0]`,
     );
 
     return {

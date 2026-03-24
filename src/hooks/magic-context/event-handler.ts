@@ -6,7 +6,7 @@ import {
 } from "../../features/magic-context/storage";
 import type { Tagger } from "../../features/magic-context/tagger";
 import type { ContextUsage } from "../../features/magic-context/types";
-import { log } from "../../shared/logger";
+import { log, sessionLog } from "../../shared/logger";
 import { checkCompartmentTrigger } from "./compartment-trigger";
 import {
     getMessageUpdatedAssistantInfo,
@@ -75,7 +75,7 @@ export function createEventHandler(deps: EventHandlerDeps) {
                     cacheTtl: resolveCacheTtl(deps.config.cache_ttl, modelKey),
                 });
             } catch (error) {
-                log("[magic-context] event session.created persistence failed:", error);
+                sessionLog(info.id, "event session.created persistence failed:", error);
             }
             return;
         }
@@ -83,9 +83,17 @@ export function createEventHandler(deps: EventHandlerDeps) {
         if (input.event.type === "message.updated") {
             const info = getMessageUpdatedAssistantInfo(input.event.properties);
             if (!info) {
-                log(
-                    "[magic-context] event message.updated: no assistant info extracted from event",
-                );
+                const sessionId = properties ? resolveSessionId(properties) : null;
+                if (sessionId) {
+                    sessionLog(
+                        sessionId,
+                        "event message.updated: no assistant info extracted from event",
+                    );
+                } else {
+                    log(
+                        "[magic-context] event message.updated: no assistant info extracted from event",
+                    );
+                }
                 return;
             }
 
@@ -99,14 +107,16 @@ export function createEventHandler(deps: EventHandlerDeps) {
                 (value) => typeof value === "number" && value > 0,
             );
 
-            log(
-                `[magic-context] event message.updated: session=${info.sessionID} provider=${info.providerID} model=${info.modelID} hasUsageTokens=${hasUsageTokens} tokens.input=${info.tokens?.input} cache.read=${info.tokens?.cache?.read} cache.write=${info.tokens?.cache?.write}`,
+            sessionLog(
+                info.sessionID,
+                `event message.updated: provider=${info.providerID} model=${info.modelID} hasUsageTokens=${hasUsageTokens} tokens.input=${info.tokens?.input} cache.read=${info.tokens?.cache?.read} cache.write=${info.tokens?.cache?.write}`,
             );
 
             const hasKnownUsage = hasUsageTokens || deps.contextUsageMap.has(info.sessionID);
             if (!hasKnownUsage) {
-                log(
-                    "[magic-context] event message.updated: skipping — no usage tokens and no known usage",
+                sessionLog(
+                    info.sessionID,
+                    "event message.updated: skipping — no usage tokens and no known usage",
                 );
                 return;
             }
@@ -138,8 +148,9 @@ export function createEventHandler(deps: EventHandlerDeps) {
                     });
                     const percentage = (totalInputTokens / contextLimit) * 100;
 
-                    log(
-                        `[magic-context] event message.updated: totalInputTokens=${totalInputTokens} contextLimit=${contextLimit} percentage=${percentage.toFixed(1)}%`,
+                    sessionLog(
+                        info.sessionID,
+                        `event message.updated: totalInputTokens=${totalInputTokens} contextLimit=${contextLimit} percentage=${percentage.toFixed(1)}%`,
                     );
 
                     deps.contextUsageMap.set(info.sessionID, {
@@ -170,8 +181,9 @@ export function createEventHandler(deps: EventHandlerDeps) {
                         );
 
                         if (triggerResult.shouldFire) {
-                            log(
-                                `[magic-context] compartment trigger: firing (reason=${triggerResult.reason})`,
+                            sessionLog(
+                                info.sessionID,
+                                `compartment trigger: firing (reason=${triggerResult.reason})`,
                             );
                             updateSessionMeta(deps.db, info.sessionID, {
                                 compartmentInProgress: true,
@@ -182,7 +194,7 @@ export function createEventHandler(deps: EventHandlerDeps) {
 
                 updateSessionMeta(deps.db, info.sessionID, updates);
             } catch (error) {
-                log("[magic-context] event message.updated persistence failed:", error);
+                sessionLog(info.sessionID, "event message.updated persistence failed:", error);
             }
             return;
         }
@@ -196,7 +208,7 @@ export function createEventHandler(deps: EventHandlerDeps) {
             try {
                 deps.compactionHandler.onCompacted(sessionId, deps.db);
             } catch (error) {
-                log("[magic-context] event session.compacted handling failed:", error);
+                sessionLog(sessionId, "event session.compacted handling failed:", error);
             }
             deps.onSessionCacheInvalidated?.(sessionId);
             return;
@@ -213,7 +225,7 @@ export function createEventHandler(deps: EventHandlerDeps) {
             try {
                 clearSession(deps.db, sessionId);
             } catch (error) {
-                log("[magic-context] event session.deleted persistence failed:", error);
+                sessionLog(sessionId, "event session.deleted persistence failed:", error);
             }
             deps.onSessionCacheInvalidated?.(sessionId);
             deps.contextUsageMap.delete(sessionId);

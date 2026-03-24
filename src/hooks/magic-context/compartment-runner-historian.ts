@@ -55,7 +55,7 @@ export async function runValidatedHistorianPass(args: {
         args.sequenceOffset,
     );
     if (firstValidation.ok) {
-        cleanupHistorianDump(firstRun.dumpPath);
+        cleanupHistorianDump(args.parentSessionId, firstRun.dumpPath);
         return firstValidation;
     }
 
@@ -82,8 +82,8 @@ export async function runValidatedHistorianPass(args: {
         args.sequenceOffset,
     );
     if (repairValidation.ok) {
-        cleanupHistorianDump(firstRun.dumpPath);
-        cleanupHistorianDump(repairRun.dumpPath);
+        cleanupHistorianDump(args.parentSessionId, firstRun.dumpPath);
+        cleanupHistorianDump(args.parentSessionId, repairRun.dumpPath);
     }
 
     return repairValidation;
@@ -153,7 +153,7 @@ async function runHistorianPrompt(args: {
     } catch (modelError: unknown) {
         const modelMsg = getErrorMessage(modelError);
         const modelStack = modelError instanceof Error ? modelError.stack : undefined;
-        shared.log("[magic-context] compartment agent: historian attempt failed", {
+        shared.sessionLog(parentSessionId, "compartment agent: historian attempt failed", {
             error: modelMsg,
             promptLength: prompt.length,
             stack: modelStack,
@@ -164,8 +164,9 @@ async function runHistorianPrompt(args: {
             await client.session
                 .delete({ path: { id: agentSessionId }, query: { directory: sessionDirectory } })
                 .catch((e: unknown) => {
-                    shared.log(
-                        "[magic-context] compartment agent: session cleanup failed",
+                    shared.sessionLog(
+                        parentSessionId,
+                        "compartment agent: session cleanup failed",
                         getErrorMessage(e),
                     );
                 });
@@ -173,16 +174,20 @@ async function runHistorianPrompt(args: {
     }
 }
 
-function cleanupHistorianDump(dumpPath?: string): void {
+function cleanupHistorianDump(sessionId: string, dumpPath?: string): void {
     if (!dumpPath) return;
 
     try {
         unlinkSync(dumpPath);
     } catch (error: unknown) {
-        shared.log("[magic-context] compartment agent: failed to remove historian response dump", {
-            dumpPath,
-            error: getErrorMessage(error),
-        });
+        shared.sessionLog(
+            sessionId,
+            "compartment agent: failed to remove historian response dump",
+            {
+                dumpPath,
+                error: getErrorMessage(error),
+            },
+        );
     }
 }
 
@@ -196,15 +201,13 @@ function dumpHistorianResponse(sessionId: string, label: string, text: string): 
             `${safeSessionId}-${safeLabel}-${Date.now()}.xml`,
         );
         writeFileSync(dumpPath, text, "utf8");
-        shared.log("[magic-context] compartment agent: historian response dumped", {
-            sessionId,
+        shared.sessionLog(sessionId, "compartment agent: historian response dumped", {
             label,
             dumpPath,
         });
         return dumpPath;
     } catch (error: unknown) {
-        shared.log("[magic-context] compartment agent: failed to dump historian response", {
-            sessionId,
+        shared.sessionLog(sessionId, "compartment agent: failed to dump historian response", {
             label,
             error: getErrorMessage(error),
         });

@@ -11,7 +11,7 @@ import {
 import type { Tagger } from "../../features/magic-context/tagger";
 import type { ContextUsage, TagEntry } from "../../features/magic-context/types";
 import type { PluginContext } from "../../plugin/types";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { FORCE_MATERIALIZE_PERCENTAGE } from "./compartment-trigger";
 import {
     type PreparedCompartmentInjection,
@@ -91,7 +91,7 @@ export function createTransform(deps: TransformDeps) {
             // Intentional fail-open: magic-context should not block live chat if session state read fails.
             sessionMeta = getOrCreateSessionMeta(db, sessionId);
         } catch (error) {
-            log("[magic-context] transform failed reading session meta:", error);
+            sessionLog(sessionId, "transform failed reading session meta:", error);
             return;
         }
 
@@ -112,8 +112,9 @@ export function createTransform(deps: TransformDeps) {
         // acceptable — a few hundred redundant tokens vs destroying the cache prefix.
         if (deps.pendingSidekickResults?.has(sessionId)) {
             deps.pendingSidekickResults.delete(sessionId);
-            log(
-                "[magic-context] sidekick augmented this turn (memory block kept for cache stability)",
+            sessionLog(
+                sessionId,
+                "sidekick augmented this turn (memory block kept for cache stability)",
             );
         }
 
@@ -152,8 +153,9 @@ export function createTransform(deps: TransformDeps) {
             hasRecentReduceCall = result.hasRecentReduceCall;
             logTransformTiming(sessionId, "tagMessages", t0);
         } catch (error) {
-            log(
-                "[magic-context] transform tag persistence failed; continuing without tagging:",
+            sessionLog(
+                sessionId,
+                "transform tag persistence failed; continuing without tagging:",
                 error,
             );
         }
@@ -170,7 +172,7 @@ export function createTransform(deps: TransformDeps) {
             batch?.finalize();
             logTransformTiming(sessionId, "batchFinalize:flushed", t2);
         } catch (error) {
-            log("[magic-context] transform failed applying flushed statuses:", error);
+            sessionLog(sessionId, "transform failed applying flushed statuses:", error);
             deps.nudgePlacements.clear(sessionId);
         }
         if (didMutateFromFlushedStatuses) {
@@ -276,8 +278,9 @@ export function createTransform(deps: TransformDeps) {
         });
 
         const elapsed = (performance.now() - startTime).toFixed(1);
-        log(
-            `[magic-context] transform completed in ${elapsed}ms (${messages.length} messages, ${targets.size} targets, watermark: ${watermark})`,
+        sessionLog(
+            sessionId,
+            `transform completed in ${elapsed}ms (${messages.length} messages, ${targets.size} targets, watermark: ${watermark})`,
         );
     };
 }

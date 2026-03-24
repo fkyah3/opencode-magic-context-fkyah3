@@ -2,7 +2,7 @@ import type { Scheduler } from "../../features/magic-context/scheduler";
 import type { ContextDatabase } from "../../features/magic-context/storage";
 import { loadPersistedUsage } from "../../features/magic-context/storage";
 import type { ContextUsage, SessionMeta } from "../../features/magic-context/types";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 
 export function loadContextUsage(
     contextUsageMap: Map<string, { usage: ContextUsage; updatedAt: number }>,
@@ -18,7 +18,7 @@ export function loadContextUsage(
                 contextUsageEntry = persisted;
             }
         } catch (error) {
-            log("[magic-context] transform failed loading persisted usage:", error);
+            sessionLog(sessionId, "transform failed loading persisted usage:", error);
         }
     }
     return contextUsageEntry?.usage ?? { percentage: 0, inputTokens: 0 };
@@ -31,13 +31,19 @@ export function resolveSchedulerDecision(
     sessionId: string,
 ): "execute" | "defer" {
     try {
-        const schedulerDecision = scheduler.shouldExecute(sessionMeta, contextUsage);
-        log(
-            `[magic-context] transform scheduler: session=${sessionId} percentage=${contextUsage.percentage.toFixed(1)}% inputTokens=${contextUsage.inputTokens} cacheTtl=${sessionMeta.cacheTtl} lastResponseTime=${sessionMeta.lastResponseTime} decision=${schedulerDecision}`,
+        const schedulerDecision = scheduler.shouldExecute(
+            sessionMeta,
+            contextUsage,
+            undefined,
+            sessionId,
+        );
+        sessionLog(
+            sessionId,
+            `transform scheduler: percentage=${contextUsage.percentage.toFixed(1)}% inputTokens=${contextUsage.inputTokens} cacheTtl=${sessionMeta.cacheTtl} lastResponseTime=${sessionMeta.lastResponseTime} decision=${schedulerDecision}`,
         );
         return schedulerDecision;
     } catch (error) {
-        log("[magic-context] transform scheduler failed; defaulting to defer:", error);
+        sessionLog(sessionId, "transform scheduler failed; defaulting to defer:", error);
         return "defer";
     }
 }

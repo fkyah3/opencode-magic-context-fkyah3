@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { log } from "../../../shared/logger";
+import { log, sessionLog } from "../../../shared/logger";
 import { escapeXmlContent } from "../compartment-storage";
 import { cosineSimilarity } from "../memory/cosine-similarity";
 import { embed } from "../memory/embedding";
@@ -141,6 +141,7 @@ function getToolCallSummary(message: OpenAIChatMessage): string[] {
 
 export async function runSidekick(deps: {
     db: Database;
+    sessionId?: string;
     projectPath: string;
     userMessage: string;
     config: SidekickConfig;
@@ -171,6 +172,7 @@ export async function runSidekick(deps: {
                 tools,
                 timeoutMs: deps.config.timeout_ms,
                 temperature: 0,
+                sessionId: deps.sessionId,
             });
 
             const choice = response.choices[0];
@@ -179,9 +181,16 @@ export async function runSidekick(deps: {
             }
 
             const assistantMessage = choice.message;
-            log(
-                `[magic-context] sidekick: iteration ${iteration}, tool_calls: ${JSON.stringify(getToolCallSummary(assistantMessage))}`,
-            );
+            if (deps.sessionId) {
+                sessionLog(
+                    deps.sessionId,
+                    `sidekick: iteration ${iteration}, tool_calls: ${JSON.stringify(getToolCallSummary(assistantMessage))}`,
+                );
+            } else {
+                log(
+                    `[magic-context] sidekick: iteration ${iteration}, tool_calls: ${JSON.stringify(getToolCallSummary(assistantMessage))}`,
+                );
+            }
 
             messages.push(assistantMessage);
 
@@ -218,7 +227,11 @@ export async function runSidekick(deps: {
 
         return null;
     } catch (error) {
-        log("[magic-context] sidekick failed:", error);
+        if (deps.sessionId) {
+            sessionLog(deps.sessionId, "sidekick failed:", error);
+        } else {
+            log("[magic-context] sidekick failed:", error);
+        }
         return null;
     }
 }

@@ -4,7 +4,7 @@
 // internally caches prepared statements, so the WeakMap pattern here would save only the
 // db.prepare() call overhead (~0.01ms). Not worth the added complexity.
 import type { Database } from "bun:sqlite";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import type { PendingOp } from "./types";
 
 interface PendingOpRow {
@@ -29,9 +29,7 @@ function isPendingOpRow(row: unknown): row is PendingOpRow {
 
 function toPendingOp(row: PendingOpRow): PendingOp | null {
     if (row.operation !== "drop") {
-        log(
-            `[magic-context] unknown pending operation "${row.operation}" for session ${row.session_id}; ignoring`,
-        );
+        sessionLog(row.session_id, `unknown pending operation "${row.operation}"; ignoring`);
         return null;
     }
 

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { log } from "../../../shared/logger";
+import { sessionLog } from "../../../shared/logger";
 import { CATEGORY_DEFAULT_TTL, PROMOTABLE_CATEGORIES } from "./constants";
 import { embedText, getEmbeddingModelId } from "./embedding";
 import { computeNormalizedHash } from "./normalize-hash";
@@ -56,20 +56,25 @@ export function promoteSessionFactsToMemory(
             };
 
             const memory = insertMemory(db, memoryInput);
-            void embedAndStoreMemory(db, memory.id, memory.content);
+            void embedAndStoreMemory(db, sessionId, memory.id, memory.content);
         }
     } catch (error) {
-        log(`[magic-context] memory promotion failed for session ${sessionId}:`, error);
+        sessionLog(sessionId, "memory promotion failed:", error);
     }
 }
 
-async function embedAndStoreMemory(db: Database, memoryId: number, content: string): Promise<void> {
+async function embedAndStoreMemory(
+    db: Database,
+    sessionId: string,
+    memoryId: number,
+    content: string,
+): Promise<void> {
     try {
         const embedding = await embedText(content);
         if (embedding) {
             saveEmbedding(db, memoryId, embedding, getEmbeddingModelId());
         }
     } catch (error) {
-        log(`[magic-context] memory embedding failed for memory ${memoryId}:`, error);
+        sessionLog(sessionId, `memory embedding failed for memory ${memoryId}:`, error);
     }
 }

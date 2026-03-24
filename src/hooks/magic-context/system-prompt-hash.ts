@@ -7,7 +7,7 @@ import {
     getOrCreateSessionMeta,
     updateSessionMeta,
 } from "../../features/magic-context/storage";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 
 const MAGIC_CONTEXT_MARKER = "## Magic Context";
 
@@ -40,8 +40,9 @@ export function createSystemPromptHashHandler(deps: {
             const detectedAgent = detectAgentFromSystemPrompt(fullPrompt);
             const guidance = buildMagicContextSection(detectedAgent, deps.protectedTags);
             output.system.push(guidance);
-            log(
-                `[magic-context] injected ${detectedAgent ?? "generic"} guidance into system prompt`,
+            sessionLog(
+                sessionId,
+                `injected ${detectedAgent ?? "generic"} guidance into system prompt`,
             );
         }
 
@@ -60,14 +61,16 @@ export function createSystemPromptHashHandler(deps: {
 
         const previousHash = sessionMeta.systemPromptHash;
         if (previousHash !== 0 && previousHash !== currentHash) {
-            log(
-                `[magic-context] system prompt hash changed: ${previousHash} → ${currentHash} (len=${systemContent.length}), triggering flush for session ${sessionId}`,
+            sessionLog(
+                sessionId,
+                `system prompt hash changed: ${previousHash} → ${currentHash} (len=${systemContent.length}), triggering flush`,
             );
             deps.flushedSessions.add(sessionId);
             deps.lastHeuristicsTurnId.delete(sessionId);
         } else if (previousHash === 0) {
-            log(
-                `[magic-context] system prompt hash initialized: ${currentHash} (len=${systemContent.length}) for session ${sessionId}`,
+            sessionLog(
+                sessionId,
+                `system prompt hash initialized: ${currentHash} (len=${systemContent.length})`,
             );
         }
 

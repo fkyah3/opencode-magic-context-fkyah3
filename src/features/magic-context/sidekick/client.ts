@@ -1,4 +1,4 @@
-import { log } from "../../../shared/logger";
+import { log, sessionLog } from "../../../shared/logger";
 import type { OpenAIChatCompletionResponse, OpenAIChatMessage, OpenAIChatTool } from "./types";
 
 function normalizeEndpoint(endpoint: string): string {
@@ -22,6 +22,7 @@ export async function chatCompletions(args: {
     timeoutMs: number;
     tools?: OpenAIChatTool[];
     temperature?: number;
+    sessionId?: string;
 }): Promise<OpenAIChatCompletionResponse> {
     const signal = AbortSignal.timeout(args.timeoutMs);
     const url = normalizeEndpoint(args.endpoint);
@@ -56,14 +57,22 @@ export async function chatCompletions(args: {
             signal,
         });
     } catch (error) {
-        log(`[magic-context] sidekick chat request failed: ${getErrorMessage(error)}`);
+        if (args.sessionId) {
+            sessionLog(args.sessionId, `sidekick chat request failed: ${getErrorMessage(error)}`);
+        } else {
+            log(`[magic-context] sidekick chat request failed: ${getErrorMessage(error)}`);
+        }
         throw error;
     }
 
     if (!response.ok) {
         const errorText = await response.text().catch(() => "");
         const errorMessage = `HTTP ${response.status}${errorText.length > 0 ? `: ${errorText}` : ""}`;
-        log(`[magic-context] sidekick chat request failed: ${errorMessage}`);
+        if (args.sessionId) {
+            sessionLog(args.sessionId, `sidekick chat request failed: ${errorMessage}`);
+        } else {
+            log(`[magic-context] sidekick chat request failed: ${errorMessage}`);
+        }
         throw new Error(errorMessage);
     }
 

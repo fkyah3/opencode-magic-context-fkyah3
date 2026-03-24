@@ -1,4 +1,4 @@
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { appendNudgeToAssistant, reinjectNudgeAtAnchor } from "./nudge-injection";
 import type { NudgePlacementStore } from "./nudge-placement-store";
 import type { ContextNudge } from "./nudger";
@@ -22,8 +22,9 @@ export function applyContextNudge(
     }
 
     if (existingPlacement.nudgeText !== nudge.text) {
-        log(
-            `[magic-context] keeping anchored nudge stable to avoid cache bust: session=${sessionId} messageId=${existingPlacement.messageId}`,
+        sessionLog(
+            sessionId,
+            `keeping anchored nudge stable to avoid cache bust: messageId=${existingPlacement.messageId}`,
         );
     }
 
@@ -34,8 +35,9 @@ export function applyContextNudge(
         sessionId,
     );
     if (!reinjected) {
-        log(
-            `[magic-context] preserving anchored nudge without re-anchor to avoid cache bust: session=${sessionId} messageId=${existingPlacement.messageId}`,
+        sessionLog(
+            sessionId,
+            `preserving anchored nudge without re-anchor to avoid cache bust: messageId=${existingPlacement.messageId}`,
         );
         return;
     }

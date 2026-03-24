@@ -6,7 +6,7 @@ import {
     updateSessionMeta,
 } from "../../features/magic-context/storage";
 import type { ContextUsage, SessionMeta, TagEntry } from "../../features/magic-context/types";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { resolveExecuteThreshold } from "./event-resolvers";
 import { formatBytes } from "./format-bytes";
 import {
@@ -82,8 +82,9 @@ export function createNudger(config: {
         }
 
         if (lastReduceAt !== undefined && now - lastReduceAt <= RECENT_CTX_REDUCE_WINDOW_MS) {
-            log(
-                `[magic-context] nudge: suppressed at ${contextUsage.percentage.toFixed(1)}% because ctx_reduce ran recently (${now - lastReduceAt}ms ago)`,
+            sessionLog(
+                sessionId,
+                `nudge: suppressed at ${contextUsage.percentage.toFixed(1)}% because ctx_reduce ran recently (${now - lastReduceAt}ms ago)`,
             );
             return null;
         }
@@ -135,8 +136,9 @@ export function createNudger(config: {
             contextUsage.percentage < executeThreshold &&
             contextUsage.inputTokens - sessionMeta.lastNudgeTokens >= currentInterval
         ) {
-            log(
-                `[magic-context] nudge fired: iteration_nudge at ${contextUsage.percentage.toFixed(1)}% (${messagesSinceLastUser} messages since user, interval: ${contextUsage.inputTokens - sessionMeta.lastNudgeTokens}/${currentInterval} tokens)`,
+            sessionLog(
+                sessionId,
+                `nudge fired: iteration_nudge at ${contextUsage.percentage.toFixed(1)}% (${messagesSinceLastUser} messages since user, interval: ${contextUsage.inputTokens - sessionMeta.lastNudgeTokens}/${currentInterval} tokens)`,
             );
             updateSessionMeta(db, sessionId, { lastNudgeTokens: contextUsage.inputTokens });
             return {
@@ -169,8 +171,9 @@ export function createNudger(config: {
             const reason = bandEscalated
                 ? `band escalation (${formatRollingNudgeBand(lastBand)} -> ${currentBand})`
                 : `interval ${contextUsage.inputTokens - sessionMeta.lastNudgeTokens}/${currentInterval} tokens`;
-            log(
-                `[magic-context] nudge fired: rolling_${currentBand} at ${contextUsage.percentage.toFixed(1)}% (${reason})`,
+            sessionLog(
+                sessionId,
+                `nudge fired: rolling_${currentBand} at ${contextUsage.percentage.toFixed(1)}% (${reason})`,
             );
             updateSessionMeta(db, sessionId, {
                 lastNudgeTokens: contextUsage.inputTokens,
@@ -188,8 +191,9 @@ export function createNudger(config: {
             };
         }
 
-        log(
-            `[magic-context] nudge: none fired at ${contextUsage.percentage.toFixed(1)}% (band=${currentBand} lastBand=${formatRollingNudgeBand(lastBand)} lastNudge=${sessionMeta.lastNudgeTokens} current=${contextUsage.inputTokens} interval=${currentInterval} projected=${projectedPercentage?.toFixed(1) ?? "none"})`,
+        sessionLog(
+            sessionId,
+            `nudge: none fired at ${contextUsage.percentage.toFixed(1)}% (band=${currentBand} lastBand=${formatRollingNudgeBand(lastBand)} lastNudge=${sessionMeta.lastNudgeTokens} current=${contextUsage.inputTokens} interval=${currentInterval} projected=${projectedPercentage?.toFixed(1) ?? "none"})`,
         );
         return null;
     };

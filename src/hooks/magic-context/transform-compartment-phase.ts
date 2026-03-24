@@ -2,7 +2,7 @@ import { DEFAULT_COMPARTMENT_TOKEN_BUDGET } from "../../config/schema/magic-cont
 import { getLastCompartmentEndMessage } from "../../features/magic-context/compartment-storage";
 import { type ContextDatabase, updateSessionMeta } from "../../features/magic-context/storage";
 import type { PluginContext } from "../../plugin/types";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { getActiveCompartmentRun, startCompartmentAgent } from "./compartment-runner";
 import { BLOCK_UNTIL_DONE_PERCENTAGE, FORCE_MATERIALIZE_PERCENTAGE } from "./compartment-trigger";
 import {
@@ -64,10 +64,11 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
     }
 
     async function awaitCompartmentRun(activeRun: Promise<void>, reason: string): Promise<void> {
-        log(reason);
+        sessionLog(args.sessionId, reason);
         await activeRun;
-        log(
-            "[magic-context] transform: compartment agent completed, refreshing compartment coverage",
+        sessionLog(
+            args.sessionId,
+            "transform: compartment agent completed, refreshing compartment coverage",
         );
         pendingCompartmentInjection = prepareCompartmentInjection(
             args.db,
@@ -84,17 +85,18 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
         !getActiveCompartmentRun(args.sessionId)
     ) {
         if (!hasEligibleHistoryForCompartment()) {
-            log(
-                `[magic-context] transform: skipping compartment start, no eligible history before protected tail (beyond ${lastCompartmentEnd ?? -1})`,
+            sessionLog(
+                args.sessionId,
+                `transform: skipping compartment start, no eligible history before protected tail (beyond ${lastCompartmentEnd ?? -1})`,
             );
             updateSessionMeta(args.db, args.sessionId, { compartmentInProgress: false });
             compartmentInProgress = false;
         } else if (!args.client) {
-            log("[magic-context] transform: cannot start compartment agent without client");
+            sessionLog(args.sessionId, "transform: cannot start compartment agent without client");
             updateSessionMeta(args.db, args.sessionId, { compartmentInProgress: false });
             compartmentInProgress = false;
         } else {
-            log("[magic-context] transform: compartmentInProgress flag set, starting agent");
+            sessionLog(args.sessionId, "transform: compartmentInProgress flag set, starting agent");
             startCompartmentAgent({
                 client: args.client,
                 db: args.db,
@@ -116,7 +118,7 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
         if (activeRun) {
             await awaitCompartmentRun(
                 activeRun,
-                `[magic-context] transform: ${FORCE_MATERIALIZE_PERCENTAGE}% reached (${args.contextUsage.percentage.toFixed(1)}%), waiting for active compartment run before forcing materialization`,
+                `transform: ${FORCE_MATERIALIZE_PERCENTAGE}% reached (${args.contextUsage.percentage.toFixed(1)}%), waiting for active compartment run before forcing materialization`,
             );
             awaitedCompartmentRun = true;
             compartmentInProgress = false;
@@ -126,8 +128,9 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
     if (args.canRunCompartments && args.contextUsage.percentage >= BLOCK_UNTIL_DONE_PERCENTAGE) {
         let activeRun = getActiveCompartmentRun(args.sessionId);
         if (!activeRun && hasEligibleHistoryForCompartment() && args.client) {
-            log(
-                `[magic-context] transform: 95% reached (${args.contextUsage.percentage.toFixed(1)}%), force-starting compartment agent and blocking`,
+            sessionLog(
+                args.sessionId,
+                `transform: 95% reached (${args.contextUsage.percentage.toFixed(1)}%), force-starting compartment agent and blocking`,
             );
             startCompartmentAgent({
                 client: args.client,
@@ -141,12 +144,15 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
             });
             activeRun = getActiveCompartmentRun(args.sessionId);
         } else if (!activeRun && hasEligibleHistoryForCompartment()) {
-            log("[magic-context] transform: cannot force-start compartment agent without client");
+            sessionLog(
+                args.sessionId,
+                "transform: cannot force-start compartment agent without client",
+            );
         }
         if (activeRun) {
             await awaitCompartmentRun(
                 activeRun,
-                `[magic-context] transform: blocking at ${args.contextUsage.percentage.toFixed(1)}% until compartment agent completes`,
+                `transform: blocking at ${args.contextUsage.percentage.toFixed(1)}% until compartment agent completes`,
             );
             awaitedCompartmentRun = true;
             compartmentInProgress = false;

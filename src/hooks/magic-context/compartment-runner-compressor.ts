@@ -5,7 +5,7 @@ import {
     getSessionFacts,
     replaceAllCompartmentState,
 } from "../../features/magic-context/compartment-storage";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { getErrorMessage } from "../../shared/error-message";
 import { buildCompressorPrompt, COMPRESSOR_AGENT_SYSTEM_PROMPT } from "./compartment-prompt";
 import { parseCompartmentOutput } from "./compartment-parser";
@@ -51,15 +51,17 @@ export async function runCompressionPassIfNeeded(deps: CompressorDeps): Promise<
     }
 
     if (totalTokens <= historyBudgetTokens) {
-        log(
-            `[magic-context] compressor: history block ~${totalTokens} tokens within budget ${historyBudgetTokens}, skipping`,
+        sessionLog(
+            sessionId,
+            `compressor: history block ~${totalTokens} tokens within budget ${historyBudgetTokens}, skipping`,
         );
         return false;
     }
 
     const overage = totalTokens - historyBudgetTokens;
-    log(
-        `[magic-context] compressor: history block ~${totalTokens} tokens exceeds budget ${historyBudgetTokens} by ~${overage} tokens`,
+    sessionLog(
+        sessionId,
+        `compressor: history block ~${totalTokens} tokens exceeds budget ${historyBudgetTokens} by ~${overage} tokens`,
     );
 
     // Select oldest N compartments whose combined tokens are ~2× the overage
@@ -78,15 +80,16 @@ export async function runCompressionPassIfNeeded(deps: CompressorDeps): Promise<
 
     // Need at least 2 compartments to compress (merging 1 is pointless)
     if (selectedCount < 2) {
-        log("[magic-context] compressor: not enough compartments to compress, skipping");
+        sessionLog(sessionId, "compressor: not enough compartments to compress, skipping");
         return false;
     }
 
     const selectedCompartments = compartments.slice(0, selectedCount);
     const targetTokens = Math.floor(selectedTokens / 2);
 
-    log(
-        `[magic-context] compressor: selected ${selectedCount} oldest compartments (~${selectedTokens} tokens), target ~${targetTokens} tokens`,
+    sessionLog(
+        sessionId,
+        `compressor: selected ${selectedCount} oldest compartments (~${selectedTokens} tokens), target ~${targetTokens} tokens`,
     );
 
     try {
@@ -98,8 +101,9 @@ export async function runCompressionPassIfNeeded(deps: CompressorDeps): Promise<
         });
 
         if (!compressed) {
-            log(
-                "[magic-context] compressor: compression pass failed, keeping existing compartments",
+            sessionLog(
+                sessionId,
+                "compressor: compression pass failed, keeping existing compartments",
             );
             return false;
         }
@@ -134,21 +138,28 @@ export async function runCompressionPassIfNeeded(deps: CompressorDeps): Promise<
         const compressedEnd = compressed[compressed.length - 1].endMessage;
 
         if (compressedStart !== originalStart || compressedEnd !== originalEnd) {
-            log(
-                `[magic-context] compressor: compressed range ${compressedStart}-${compressedEnd} doesn't match original ${originalStart}-${originalEnd}, aborting`,
+            sessionLog(
+                sessionId,
+                `compressor: compressed range ${compressedStart}-${compressedEnd} doesn't match original ${originalStart}-${originalEnd}, aborting`,
             );
             return false;
         }
 
         // Persist: replace compartments only, keep facts as-is
-        replaceAllCompartmentState(db, sessionId, allCompartments, facts.map((f) => ({ category: f.category, content: f.content })));
+        replaceAllCompartmentState(
+            db,
+            sessionId,
+            allCompartments,
+            facts.map((f) => ({ category: f.category, content: f.content })),
+        );
 
-        log(
-            `[magic-context] compressor: replaced ${selectedCount} compartments with ${compressed.length} compressed compartments`,
+        sessionLog(
+            sessionId,
+            `compressor: replaced ${selectedCount} compartments with ${compressed.length} compressed compartments`,
         );
         return true;
     } catch (error: unknown) {
-        log("[magic-context] compressor: unexpected error:", getErrorMessage(error));
+        sessionLog(sessionId, "compressor: unexpected error:", getErrorMessage(error));
         return false;
     }
 }
@@ -201,7 +212,7 @@ async function runCompressorPass(args: CompressorPassArgs): Promise<Array<{
         agentSessionId = typeof createdSession?.id === "string" ? createdSession.id : null;
 
         if (!agentSessionId) {
-            log("[magic-context] compressor: could not create child session");
+            sessionLog(sessionId, "compressor: could not create child session");
             return null;
         }
 
@@ -226,13 +237,13 @@ async function runCompressorPass(args: CompressorPassArgs): Promise<Array<{
         });
         const result = extractLatestAssistantText(messages);
         if (!result) {
-            log("[magic-context] compressor: historian returned no output");
+            sessionLog(sessionId, "compressor: historian returned no output");
             return null;
         }
 
         const parsed = parseCompartmentOutput(result);
         if (parsed.compartments.length === 0) {
-            log("[magic-context] compressor: historian returned no compartments");
+            sessionLog(sessionId, "compressor: historian returned no compartments");
             return null;
         }
 
@@ -253,14 +264,18 @@ async function runCompressorPass(args: CompressorPassArgs): Promise<Array<{
             content: pc.content,
         }));
     } catch (error: unknown) {
-        log("[magic-context] compressor: historian call failed:", getErrorMessage(error));
+        sessionLog(sessionId, "compressor: historian call failed:", getErrorMessage(error));
         return null;
     } finally {
         if (agentSessionId) {
             await client.session
                 .delete({ path: { id: agentSessionId }, query: { directory } })
                 .catch((e: unknown) => {
-                    log("[magic-context] compressor: session cleanup failed:", getErrorMessage(e));
+                    sessionLog(
+                        sessionId,
+                        "compressor: session cleanup failed:",
+                        getErrorMessage(e),
+                    );
                 });
         }
     }

@@ -8,7 +8,7 @@ import {
     updateSessionMeta,
 } from "../../features/magic-context/storage";
 import type { SessionMeta, TagEntry } from "../../features/magic-context/types";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { applyContextNudge } from "./apply-context-nudge";
 import { getActiveCompartmentRun } from "./compartment-runner";
 import { dropStaleReduceCalls } from "./drop-stale-reduce-calls";
@@ -112,25 +112,31 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
             : forceMaterialization
               ? `force_materialization (${args.contextUsage.percentage.toFixed(1)}% >= ${args.forceMaterializationPercentage}%)`
               : `pending_ops_execute (pendingOps=${pendingOps.length}, scheduler=${args.schedulerDecision})`;
-        log(
-            `[magic-context] heuristics WILL RUN — reason=${reason}, context=${args.contextUsage.percentage.toFixed(1)}%, turn=${args.currentTurnId}`,
+        sessionLog(
+            args.sessionId,
+            `heuristics WILL RUN — reason=${reason}, context=${args.contextUsage.percentage.toFixed(1)}%, turn=${args.currentTurnId}`,
         );
     }
     if (alreadyRanThisTurn && args.schedulerDecision === "execute" && !isExplicitFlush) {
-        log(
-            `[magic-context] transform: skipping heuristics (already ran for turn ${args.currentTurnId})`,
+        sessionLog(
+            args.sessionId,
+            `transform: skipping heuristics (already ran for turn ${args.currentTurnId})`,
         );
     }
     if (compartmentRunning && hasPendingUserOps) {
-        log("[magic-context] transform: deferring pending ops — compartment agent in progress");
+        sessionLog(
+            args.sessionId,
+            "transform: deferring pending ops — compartment agent in progress",
+        );
     }
     try {
         if (shouldApplyPendingOps) {
             const applyReason = isExplicitFlush
                 ? "explicit_flush"
                 : `scheduler_execute (scheduler=${args.schedulerDecision})`;
-            log(
-                `[magic-context] pending ops WILL APPLY — reason=${applyReason}, pendingOps=${pendingOps.length}, context=${args.contextUsage.percentage.toFixed(1)}%`,
+            sessionLog(
+                args.sessionId,
+                `pending ops WILL APPLY — reason=${applyReason}, pendingOps=${pendingOps.length}, context=${args.contextUsage.percentage.toFixed(1)}%`,
             );
             const pendingCountBefore = pendingOps.length;
             didMutateFromPendingOperations = applyPendingOperations(
@@ -194,8 +200,9 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
                 args.clearReasoningAge,
             );
             if (clearedReasoning > 0 || strippedInline > 0) {
-                log(
-                    `[magic-context] reasoning cleanup: cleared=${clearedReasoning} inlineStripped=${strippedInline}`,
+                sessionLog(
+                    args.sessionId,
+                    `reasoning cleanup: cleared=${clearedReasoning} inlineStripped=${strippedInline}`,
                 );
             }
             logTransformTiming(args.sessionId, "clearOldReasoning", t7);
@@ -210,7 +217,7 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
             updateSessionMeta(args.db, args.sessionId, { lastTransformError: null });
         }
     } catch (error) {
-        log("[magic-context] transform failed applying pending operations:", error);
+        sessionLog(args.sessionId, "transform failed applying pending operations:", error);
         updateSessionMeta(args.db, args.sessionId, { lastTransformError: getErrorMessage(error) });
         args.nudgePlacements.clear(args.sessionId);
     }
@@ -227,7 +234,7 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
             dropStaleReduceCalls(args.messages, args.protectedTags);
             logTransformTiming(args.sessionId, "dropStaleReduceCalls", t8);
         } catch (error) {
-            log("[magic-context] transform failed dropping stale ctx_reduce calls:", error);
+            sessionLog(args.sessionId, "transform failed dropping stale ctx_reduce calls:", error);
         }
     }
 
@@ -238,8 +245,9 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
             args.pendingCompartmentInjection,
         );
         if (compartmentResult.injected) {
-            log(
-                `[magic-context] transform: injected ${compartmentResult.compartmentCount} compartments ` +
+            sessionLog(
+                args.sessionId,
+                `transform: injected ${compartmentResult.compartmentCount} compartments ` +
                     `(covering raw messages 1-${compartmentResult.compartmentEndMessage}, ` +
                     `skipped ${compartmentResult.skippedVisibleMessages} visible messages)`,
             );
@@ -252,7 +260,10 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
     // messages[0] is a dropped placeholder to decide if it needs a synthetic carrier message.
     const strippedDropped = stripDroppedPlaceholderMessages(args.messages);
     if (strippedDropped > 0) {
-        log(`[magic-context] stripped ${strippedDropped} empty dropped-placeholder messages`);
+        sessionLog(
+            args.sessionId,
+            `stripped ${strippedDropped} empty dropped-placeholder messages`,
+        );
     }
 
     // Remove system-injected messages (notifications, reminders, internal markers)
@@ -263,8 +274,9 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
     const protectedTailStart = Math.max(0, args.messages.length - args.protectedTags * 2);
     const strippedSystemInjected = stripSystemInjectedMessages(args.messages, protectedTailStart);
     if (strippedSystemInjected > 0) {
-        log(
-            `[magic-context] stripped ${strippedSystemInjected} system-injected messages (notifications/reminders)`,
+        sessionLog(
+            args.sessionId,
+            `stripped ${strippedSystemInjected} system-injected messages (notifications/reminders)`,
         );
     }
 
@@ -272,8 +284,9 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
     if (pendingUserTurnReminder) {
         if (args.hasRecentReduceCall) {
             clearPersistedStickyTurnReminder(args.db, args.sessionId);
-            log(
-                "[magic-context] sticky turn reminder cleared — ctx_reduce found in recent messages",
+            sessionLog(
+                args.sessionId,
+                "sticky turn reminder cleared — ctx_reduce found in recent messages",
             );
         } else {
             if (pendingUserTurnReminder.messageId) {
@@ -283,8 +296,9 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
                     pendingUserTurnReminder.text,
                 );
                 if (!reinjected) {
-                    log(
-                        `[magic-context] preserving sticky turn reminder anchor to avoid cache bust: session=${args.sessionId} messageId=${pendingUserTurnReminder.messageId}`,
+                    sessionLog(
+                        args.sessionId,
+                        `preserving sticky turn reminder anchor to avoid cache bust: messageId=${pendingUserTurnReminder.messageId}`,
                     );
                 }
             } else {
@@ -319,7 +333,7 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
                 args.sessionMeta,
             );
         } catch (error) {
-            log("[magic-context] transform nudge computation failed:", error);
+            sessionLog(args.sessionId, "transform nudge computation failed:", error);
         }
 
         if (nudge?.type === "assistant") {

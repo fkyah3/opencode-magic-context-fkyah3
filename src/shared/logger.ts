@@ -21,6 +21,10 @@ export function log(message: string, data?: unknown): void {
     }
 }
 
+export function sessionLog(sessionId: string, message: string, data?: unknown): void {
+    log(`[magic-context][${sessionId}] ${message}`, data);
+}
+
 export function getLogFilePath(): string {
     return logFile;
 }

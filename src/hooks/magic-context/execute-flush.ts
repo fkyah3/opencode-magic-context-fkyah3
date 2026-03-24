@@ -5,7 +5,7 @@ import {
     removePendingOp,
     updateTagStatus,
 } from "../../features/magic-context/storage";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { getErrorMessage } from "../../shared/error-message";
 
 export function executeFlush(db: Database, sessionId: string): string {
@@ -35,7 +35,7 @@ export function executeFlush(db: Database, sessionId: string): string {
 
         return `Flushed: ${parts.join(", ")}. Changes take effect on next message.`;
     } catch (error) {
-        log("[magic-context] ctx-flush failed:", error);
+        sessionLog(sessionId, "ctx-flush failed:", error);
         return `Error: Failed to flush context operations. ${getErrorMessage(error)}`;
     }
 }

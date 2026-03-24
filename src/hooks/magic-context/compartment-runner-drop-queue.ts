@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { queuePendingOp } from "../../features/magic-context/storage-ops";
 import { getTagsBySession } from "../../features/magic-context/storage-tags";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { getRawSessionTagKeysThrough } from "./read-session-chunk";
 
 export function queueDropsForCompartmentalizedMessages(
@@ -21,7 +21,8 @@ export function queueDropsForCompartmentalizedMessages(
         }
     }
 
-    log(
-        `[magic-context] compartment agent: queued ${dropsQueued} drops for messages 0-${upToMessageIndex}`,
+    sessionLog(
+        sessionId,
+        `compartment agent: queued ${dropsQueued} drops for messages 0-${upToMessageIndex}`,
     );
 }

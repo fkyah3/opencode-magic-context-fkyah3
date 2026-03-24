@@ -1,5 +1,5 @@
 import { getErrorMessage } from "../../shared/error-message";
-import { log } from "../../shared/logger";
+import { log, sessionLog } from "../../shared/logger";
 
 export interface NotificationParams {
     agent?: string;
@@ -44,7 +44,7 @@ export async function sendIgnoredMessage(
             : undefined;
 
     if (!hasNotificationSessionClient(client)) {
-        log("[magic-context] session prompt API unavailable for notification");
+        sessionLog(sessionId, "session prompt API unavailable for notification");
         return;
     }
     const c = client;
@@ -72,11 +72,11 @@ export async function sendIgnoredMessage(
         } else if (typeof c.session?.promptAsync === "function") {
             await c.session.promptAsync(input);
         } else {
-            log("[magic-context] session prompt API unavailable for notification");
+            sessionLog(sessionId, "session prompt API unavailable for notification");
         }
     } catch (error: unknown) {
         const msg = getErrorMessage(error);
-        log("[magic-context] failed to send notification:", msg);
+        sessionLog(sessionId, "failed to send notification:", msg);
     }
 }
 
@@ -90,7 +90,7 @@ export async function sendUserPrompt(
     text: string,
 ): Promise<void> {
     if (!hasNotificationSessionClient(client)) {
-        log("[magic-context] session prompt API unavailable for user prompt");
+        sessionLog(sessionId, "session prompt API unavailable for user prompt");
         return;
     }
     const c = client as NotificationClient;
@@ -108,10 +108,10 @@ export async function sendUserPrompt(
         } else if (typeof c.session?.prompt === "function") {
             await Promise.resolve(c.session.prompt(input));
         } else {
-            log("[magic-context] session prompt API unavailable for user prompt");
+            sessionLog(sessionId, "session prompt API unavailable for user prompt");
         }
     } catch (error: unknown) {
         const msg = getErrorMessage(error);
-        log("[magic-context] failed to send user prompt:", msg);
+        sessionLog(sessionId, "failed to send user prompt:", msg);
     }
 }

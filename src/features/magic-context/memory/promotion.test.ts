@@ -346,7 +346,7 @@ describe("promotion", () => {
             const loggedMessages = mockLog.mock.calls.map((call) => call.join(" "));
             expect(
                 loggedMessages.some((message) =>
-                    message.includes("[magic-context] memory promotion failed for session ses-1:"),
+                    message.includes("[magic-context][ses-1] memory promotion failed:"),
                 ),
             ).toBe(true);
         });

@@ -1,4 +1,4 @@
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import type { NudgePlacementStore } from "./nudge-placement-store";
 import type { MessageLike } from "./tag-messages";
 import { isTextPart } from "./tag-part-guards";
@@ -106,8 +106,9 @@ export function appendNudgeToAssistant(
                 part.text = nextText;
                 if (message.info.id) {
                     nudgePlacements.set(sessionId, message.info.id, nudge);
-                    log(
-                        `[magic-context] nudge placed on assistant message ${message.info.id} (index ${i}/${messages.length})`,
+                    sessionLog(
+                        sessionId,
+                        `nudge placed on assistant message ${message.info.id} (index ${i}/${messages.length})`,
                     );
                 }
                 return;
@@ -118,14 +119,16 @@ export function appendNudgeToAssistant(
         message.parts.push({ type: "text", text: nudge } as MessageLike["parts"][number]);
         if (message.info.id) {
             nudgePlacements.set(sessionId, message.info.id, nudge);
-            log(
-                `[magic-context] nudge pushed as new part on assistant message ${message.info.id} (index ${i}/${messages.length})`,
+            sessionLog(
+                sessionId,
+                `nudge pushed as new part on assistant message ${message.info.id} (index ${i}/${messages.length})`,
             );
         }
         return;
     }
 
-    log(
-        `[magic-context] nudge placement failed: no suitable assistant message found (${messages.length} messages)`,
+    sessionLog(
+        sessionId,
+        `nudge placement failed: no suitable assistant message found (${messages.length} messages)`,
     );
 }

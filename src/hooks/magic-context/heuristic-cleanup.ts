@@ -5,7 +5,7 @@ import {
     updateTagStatus,
 } from "../../features/magic-context/storage";
 import type { TagEntry } from "../../features/magic-context/types";
-import { log } from "../../shared";
+import { sessionLog } from "../../shared";
 import { stripSystemInjection } from "./system-injection-stripper";
 import type { MessageLike, TagTarget } from "./tag-messages";
 import { stripTagPrefix } from "./tag-part-guards";
@@ -137,8 +137,9 @@ export function applyHeuristicCleanup(
     }
 
     if (droppedTools > 0 || deduplicatedTools > 0 || droppedInjections > 0) {
-        log(
-            `[magic-context] heuristic cleanup: dropped ${droppedTools} tool tags, deduplicated ${deduplicatedTools} tool calls, dropped ${droppedInjections} system injections`,
+        sessionLog(
+            sessionId,
+            `heuristic cleanup: dropped ${droppedTools} tool tags, deduplicated ${deduplicatedTools} tool calls, dropped ${droppedInjections} system injections`,
         );
     }
 

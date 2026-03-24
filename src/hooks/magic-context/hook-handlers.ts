@@ -7,7 +7,7 @@ import {
     updateSessionMeta,
 } from "../../features/magic-context/storage-meta";
 import type { PluginContext } from "../../plugin/types";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { FORCE_COMPARTMENT_PERCENTAGE } from "./compartment-trigger";
 import { getMessageUpdatedAssistantInfo, getSessionProperties } from "./event-payloads";
 import { resolveSessionId as resolveEventSessionId } from "./event-resolvers";
@@ -75,8 +75,9 @@ export function createChatMessageHook(args: {
             input.variant !== undefined &&
             previousVariant !== input.variant
         ) {
-            log(
-                `[magic-context] variant changed (${previousVariant} -> ${input.variant}), triggering flush for session ${sessionId}`,
+            sessionLog(
+                sessionId,
+                `variant changed (${previousVariant} -> ${input.variant}), triggering flush`,
             );
             args.flushedSessions.add(sessionId);
             args.lastHeuristicsTurnId.delete(sessionId);
@@ -149,9 +150,7 @@ export function createEventHook(args: {
         const nudgeText = generateEmergencyNudgeText(args.db, sessionId, entry.usage, {
             protected_tags: args.protectedTags,
         });
-        log(
-            `[magic-context] firing 80% emergency nudge as ignored notification for session ${sessionId}`,
-        );
+        sessionLog(sessionId, "firing 80% emergency nudge as ignored notification");
 
         try {
             const model = args.liveModelBySession.get(sessionId);
@@ -160,7 +159,7 @@ export function createEventHook(args: {
                 session: { promptAsync?: (opts: unknown) => Promise<unknown> };
             };
             if (typeof c.session?.promptAsync !== "function") {
-                log("[magic-context] emergency nudge: promptAsync unavailable");
+                sessionLog(sessionId, "emergency nudge: promptAsync unavailable");
                 args.emergencyNudgeFired.delete(sessionId);
                 return;
             }
@@ -173,7 +172,7 @@ export function createEventHook(args: {
                 },
             });
         } catch (error) {
-            log(`[magic-context] emergency nudge promptAsync failed:`, error);
+            sessionLog(sessionId, "emergency nudge promptAsync failed:", error);
             args.emergencyNudgeFired.delete(sessionId);
         }
     };

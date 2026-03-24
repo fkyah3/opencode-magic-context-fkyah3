@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { log } from "../../shared";
+import { log, sessionLog } from "../../shared";
 import { runSidekick } from "../../features/magic-context/sidekick/agent";
 import type { SidekickConfig } from "../../features/magic-context/sidekick/types";
 import { executeFlush } from "./execute-flush";
@@ -68,9 +68,10 @@ async function executeAugmentation(
     );
 
     // Step 2: Run sidekick
-    log(`[magic-context] /ctx-aug: running sidekick for session ${sessionId}`);
+    sessionLog(sessionId, "/ctx-aug: running sidekick");
     const sidekickResult = await runSidekick({
         db: deps.db,
+        sessionId,
         projectPath: deps.sidekick.projectPath,
         userMessage: prompt,
         config: deps.sidekick.config,
@@ -80,11 +81,11 @@ async function executeAugmentation(
     let augmentedPrompt: string;
     if (sidekickResult) {
         augmentedPrompt = `${prompt}\n\n<sidekick-augmentation>\n${sidekickResult}\n</sidekick-augmentation>`;
-        log(`[magic-context] /ctx-aug: sidekick returned ${sidekickResult.length} chars`);
+        sessionLog(sessionId, `/ctx-aug: sidekick returned ${sidekickResult.length} chars`);
     } else {
         // Sidekick returned nothing — send the prompt as-is with a note
         augmentedPrompt = prompt;
-        log("[magic-context] /ctx-aug: sidekick returned no result, sending prompt as-is");
+        sessionLog(sessionId, "/ctx-aug: sidekick returned no result, sending prompt as-is");
     }
 
     // Step 4: Store result so transform can suppress <project-memory> if this is the first message
@@ -174,7 +175,7 @@ export function createMagicContextCommandHandler(deps: {
             }
 
             await deps.sendNotification(sessionId, result, {});
-            log(`[magic-context] command ${input.command} handled via command.execute.before`);
+            sessionLog(sessionId, `command ${input.command} handled via command.execute.before`);
 
             // OpenCode limitation: the command.execute.before hook has no "handled" return path.
             // Throwing a sentinel exception is the only way to prevent OpenCode from continuing

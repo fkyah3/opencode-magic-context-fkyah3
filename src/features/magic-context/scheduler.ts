@@ -1,5 +1,5 @@
 import { resolveExecuteThreshold } from "../../hooks/magic-context/event-resolvers";
-import { log } from "../../shared/logger";
+import { log, sessionLog } from "../../shared/logger";
 import type { ContextUsage, SchedulerDecision, SessionMeta } from "./types";
 
 const TTL_PATTERN = /^(\d+)([smh])$/;
@@ -16,6 +16,7 @@ export interface Scheduler {
         sessionMeta: SessionMeta,
         contextUsage: ContextUsage,
         currentTime?: number,
+        sessionId?: string,
     ): SchedulerDecision;
 }
 
@@ -46,6 +47,7 @@ export function createScheduler(config: SchedulerConfig): Scheduler {
             sessionMeta: SessionMeta,
             contextUsage: ContextUsage,
             currentTime: number = Date.now(),
+            sessionId?: string,
         ): SchedulerDecision {
             const threshold = resolveExecuteThreshold(
                 config.executeThresholdPercentage,
@@ -60,10 +62,18 @@ export function createScheduler(config: SchedulerConfig): Scheduler {
             try {
                 ttlMs = parseCacheTtl(sessionMeta.cacheTtl);
             } catch (error) {
-                log(
-                    `[magic-context] invalid cache_ttl "${sessionMeta.cacheTtl}"; falling back to default 5m`,
-                    error,
-                );
+                if (sessionId) {
+                    sessionLog(
+                        sessionId,
+                        `invalid cache_ttl "${sessionMeta.cacheTtl}"; falling back to default 5m`,
+                        error,
+                    );
+                } else {
+                    log(
+                        `[magic-context] invalid cache_ttl "${sessionMeta.cacheTtl}"; falling back to default 5m`,
+                        error,
+                    );
+                }
                 ttlMs = parseCacheTtl("5m");
             }
             const elapsedTime = currentTime - sessionMeta.lastResponseTime;

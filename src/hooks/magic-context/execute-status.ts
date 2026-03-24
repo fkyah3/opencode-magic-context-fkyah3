@@ -7,7 +7,7 @@ import { parseCacheTtl } from "../../features/magic-context/scheduler";
 import { getPendingOps } from "../../features/magic-context/storage";
 import { getOrCreateSessionMeta } from "../../features/magic-context/storage-meta";
 import { getTagsBySession } from "../../features/magic-context/storage-tags";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import {
     getProactiveCompartmentTriggerPercentage,
     POST_DROP_TARGET_RATIO,
@@ -49,8 +49,9 @@ export function executeStatus(
         try {
             ttlMs = parseCacheTtl(meta.cacheTtl);
         } catch (error) {
-            log(
-                `[magic-context] invalid cache_ttl "${meta.cacheTtl}" in ctx-status; falling back to default 5m`,
+            sessionLog(
+                sessionId,
+                `invalid cache_ttl "${meta.cacheTtl}" in ctx-status; falling back to default 5m`,
                 error,
             );
             ttlMs = parseCacheTtl("5m");
@@ -131,7 +132,7 @@ export function executeStatus(
 
         return lines.join("\n");
     } catch (error) {
-        log("[magic-context] ctx-status failed:", error);
+        sessionLog(sessionId, "ctx-status failed:", error);
         return `Error: Failed to read context status. ${getErrorMessage(error)}`;
     }
 }
