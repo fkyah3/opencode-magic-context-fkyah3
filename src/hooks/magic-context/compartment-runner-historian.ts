@@ -44,7 +44,7 @@ export async function runValidatedHistorianPass(args: {
         dumpLabel: `${args.dumpLabelBase}-initial`,
     });
     if (!firstRun.ok || !firstRun.result) {
-        return { ok: false, error: firstRun.error };
+        return { ok: false, error: firstRun.error ?? "historian run failed" };
     }
 
     const firstValidation = validateHistorianOutput(
@@ -71,7 +71,7 @@ export async function runValidatedHistorianPass(args: {
         dumpLabel: `${args.dumpLabelBase}-repair`,
     });
     if (!repairRun.ok || !repairRun.result) {
-        return { ok: false, error: repairRun.error };
+        return { ok: false, error: repairRun.error ?? "historian repair run failed" };
     }
 
     const repairValidation = validateHistorianOutput(

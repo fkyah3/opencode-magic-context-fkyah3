@@ -125,7 +125,7 @@ export async function runCompartmentAgent(deps: CompartmentRunnerDeps): Promise<
             return;
         }
 
-        const newCompartments = validatedPass.compartments!;
+        const newCompartments = validatedPass.compartments;
 
         const lastNewEnd = newCompartments[newCompartments.length - 1]?.endMessage ?? 0;
         if (lastNewEnd + 1 <= offset) {

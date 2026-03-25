@@ -30,12 +30,13 @@ export interface HistorianRunResult {
     dumpPath?: string;
 }
 
-export interface ValidatedHistorianPassResult {
-    ok: boolean;
-    compartments?: CandidateCompartment[];
-    facts?: Array<{ category: string; content: string }>;
-    error?: string;
-}
+export type ValidatedHistorianPassResult =
+    | {
+          ok: true;
+          compartments: CandidateCompartment[];
+          facts: Array<{ category: string; content: string }>;
+      }
+    | { ok: false; error: string };
 
 export interface StoredCompartmentRange {
     startMessage: number;
