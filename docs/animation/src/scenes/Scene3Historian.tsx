@@ -7,6 +7,7 @@ import {
   SCENE_3_DURATION,
   OLD_MESSAGES,
   RECENT_MESSAGES,
+  INTRO_DURATION,
 } from "../constants";
 import { SkeletonMessage } from "../components/SkeletonMessage";
 import { ContextBar } from "../components/ContextBar";
@@ -18,9 +19,17 @@ import { CompartmentCard } from "../components/CompartmentCard";
 // "Compress history in the background." — The centerpiece scene
 
 export const Scene3Historian: React.FC = () => {
-  const frame = useCurrentFrame();
+  const globalFrame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const sceneStartFrame = 0;
+  const frame = globalFrame - INTRO_DURATION;
+
+  // UI fade in
+  const uiOpacity = interpolate(
+    frame,
+    [0, 15],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
 
   // Frame ranges
   const HISTORIAN_ENTER = 20;
@@ -98,6 +107,9 @@ export const Scene3Historian: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: COLORS.bg }}>
+      {/* Scene caption (Title Card) */}
+      <SceneCaption text="Compress history in the background." frame={globalFrame} />
+
       {/* Title */}
       <div
         style={{
@@ -109,6 +121,7 @@ export const Scene3Historian: React.FC = () => {
           flexDirection: "column",
           alignItems: "center",
           gap: 4,
+          opacity: uiOpacity,
         }}
       >
         <div
@@ -148,6 +161,7 @@ export const Scene3Historian: React.FC = () => {
           borderRadius: 16,
           boxShadow: "0 2px 20px rgba(0,0,0,0.3)",
           overflow: "hidden",
+          opacity: uiOpacity,
         }}
       >
         {/* Chrome bar */}
@@ -219,7 +233,7 @@ export const Scene3Historian: React.FC = () => {
       </div>
 
       {/* Chunk bracket */}
-      {frame < OLD_FADE_START + 20 && (
+      {frame >= 0 && frame < OLD_FADE_START + 20 && (
         <div
           style={{
             position: "absolute",
@@ -227,7 +241,7 @@ export const Scene3Historian: React.FC = () => {
             top: chunkBracketTop,
             width: 26,
             height: chunkBracketHeight,
-            opacity: bracketOpacity * oldOpacity,
+            opacity: bracketOpacity * oldOpacity * uiOpacity,
           }}
         >
           <div
@@ -266,18 +280,20 @@ export const Scene3Historian: React.FC = () => {
 
       {/* Flying chunk ghost */}
       {frame >= CHUNK_FLY_START && frame < CHUNK_FLY_END + 20 && (
-        <ChunkGhost
-          flyProgress={chunkFlyP}
-          startX={panelLeft + PANEL_W - 10}
-          startY={chunkBracketTop + 8}
-          targetX={historianLeft + 12}
-          targetY={historianTop + 75}
-        />
+        <div style={{ opacity: uiOpacity }}>
+          <ChunkGhost
+            flyProgress={chunkFlyP}
+            startX={panelLeft + PANEL_W - 10}
+            startY={chunkBracketTop + 8}
+            targetX={historianLeft + 12}
+            targetY={historianTop + 75}
+          />
+        </div>
       )}
 
       {/* Historian panel */}
       {frame >= HISTORIAN_ENTER && frame < HISTORIAN_EXIT && (
-        <div style={{ position: "absolute", left: historianLeft, top: historianTop }}>
+        <div style={{ position: "absolute", left: historianLeft, top: historianTop, opacity: uiOpacity }}>
           <AgentPanel
             type="historian"
             enterProgress={historianEnterP}
@@ -295,18 +311,11 @@ export const Scene3Historian: React.FC = () => {
           bottom: 42,
           left: "50%",
           transform: "translateX(-50%)",
+          opacity: uiOpacity,
         }}
       >
         <ContextBar pct={contextPct} />
       </div>
-
-      {/* Scene caption */}
-      <SceneCaption
-        text="Compress history in the background."
-        frame={frame}
-        sceneStartFrame={sceneStartFrame}
-        sceneDuration={SCENE_3_DURATION}
-      />
     </AbsoluteFill>
   );
 };

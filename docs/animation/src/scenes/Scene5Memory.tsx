@@ -6,6 +6,7 @@ import {
   PANEL_H,
   SCENE_5_DURATION,
   MEMORY_ITEMS,
+  INTRO_DURATION,
 } from "../constants";
 import { SkeletonMessage } from "../components/SkeletonMessage";
 import { ContextBar } from "../components/ContextBar";
@@ -16,9 +17,17 @@ import { MemoryBlock } from "../components/MemoryBlock";
 // "New sessions start with memory."
 
 export const Scene5Memory: React.FC = () => {
-  const frame = useCurrentFrame();
+  const globalFrame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const sceneStartFrame = 0;
+  const frame = globalFrame - INTRO_DURATION;
+
+  // UI fade in
+  const uiOpacity = interpolate(
+    frame,
+    [0, 15],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
 
   // Frame ranges
   const SESSION_CLOSE_START = 20;
@@ -71,6 +80,9 @@ export const Scene5Memory: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: COLORS.bg }}>
+      {/* Scene caption (Title Card) */}
+      <SceneCaption text="New sessions start with memory." frame={globalFrame} />
+
       {/* Title */}
       <div
         style={{
@@ -82,6 +94,7 @@ export const Scene5Memory: React.FC = () => {
           flexDirection: "column",
           alignItems: "center",
           gap: 4,
+          opacity: uiOpacity,
         }}
       >
         <div
@@ -115,7 +128,7 @@ export const Scene5Memory: React.FC = () => {
           top: panelTop + PANEL_H / 2,
           left: "50%",
           transform: "translate(-50%, -50%)",
-          opacity: sessionEndedOpacity,
+          opacity: sessionEndedOpacity * uiOpacity,
         }}
       >
         <span
@@ -143,7 +156,7 @@ export const Scene5Memory: React.FC = () => {
           borderRadius: 16,
           boxShadow: "0 2px 20px rgba(0,0,0,0.3)",
           overflow: "hidden",
-          opacity: panelOpacity,
+          opacity: panelOpacity * uiOpacity,
           transform: `scale(${panelScale})`,
         }}
       >
@@ -213,18 +226,11 @@ export const Scene5Memory: React.FC = () => {
           bottom: 42,
           left: "50%",
           transform: "translateX(-50%)",
+          opacity: uiOpacity,
         }}
       >
         <ContextBar pct={contextPct} />
       </div>
-
-      {/* Scene caption */}
-      <SceneCaption
-        text="New sessions start with memory."
-        frame={frame}
-        sceneStartFrame={sceneStartFrame}
-        sceneDuration={SCENE_5_DURATION}
-      />
     </AbsoluteFill>
   );
 };

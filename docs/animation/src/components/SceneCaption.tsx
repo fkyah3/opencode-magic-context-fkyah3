@@ -1,58 +1,54 @@
 import { interpolate } from "remotion";
-import { COLORS, FONT_FAMILY } from "../constants";
+import { COLORS, FONT_FAMILY, INTRO_DURATION } from "../constants";
 
 interface SceneCaptionProps {
   text: string;
   frame: number;
-  sceneStartFrame: number;
-  sceneDuration: number;
-  fadeInDuration?: number;
-  fadeOutDuration?: number;
 }
 
 export const SceneCaption: React.FC<SceneCaptionProps> = ({
   text,
   frame,
-  sceneStartFrame,
-  sceneDuration,
-  fadeInDuration = 15,
-  fadeOutDuration = 15,
 }) => {
-  const sceneEndFrame = sceneStartFrame + sceneDuration;
-
-  // Fade in at start
-  const fadeInProgress = interpolate(
+  // Fade in 0-15, Hold 15-60, Fade out 60-75 (assuming INTRO_DURATION = 75)
+  const opacity = interpolate(
     frame,
-    [sceneStartFrame, sceneStartFrame + fadeInDuration],
-    [0, 1],
+    [0, 15, INTRO_DURATION - 15, INTRO_DURATION],
+    [0, 1, 1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
 
-  // Fade out at end
-  const fadeOutProgress = interpolate(
-    frame,
-    [sceneEndFrame - fadeOutDuration, sceneEndFrame],
-    [1, 0],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-  );
-
-  const opacity = Math.min(fadeInProgress, fadeOutProgress);
+  // Once it fades out, it should disappear entirely to not block interaction
+  if (frame > INTRO_DURATION) return null;
 
   return (
     <div
       style={{
         position: "absolute",
-        bottom: 80,
-        left: 40,
-        fontFamily: FONT_FAMILY,
-        fontSize: 18,
-        fontWeight: 500,
-        color: COLORS.textSecondary,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         opacity,
-        letterSpacing: "0.02em",
+        zIndex: 100, // Float on top of everything
       }}
     >
-      {text}
+      <div
+        style={{
+          fontFamily: FONT_FAMILY,
+          fontSize: 36,
+          fontWeight: 600,
+          color: COLORS.textPrimary,
+          letterSpacing: "0.02em",
+          textAlign: "center",
+          maxWidth: "80%",
+        }}
+      >
+        {text}
+      </div>
     </div>
   );
 };

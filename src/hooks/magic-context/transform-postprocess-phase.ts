@@ -18,7 +18,7 @@ import {
     type PreparedCompartmentInjection,
     renderCompartmentInjection,
 } from "./inject-compartments";
-import { getNotNudgeText } from "./note-nudger";
+import { getNoteNudgeText } from "./note-nudger";
 import {
     appendSupplementalNudgeToAssistant,
     canAppendSupplementalNudgeToAssistant,
@@ -355,7 +355,7 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
             args.nudgePlacements,
             args.sessionId,
         );
-        const deferredNoteText = getNotNudgeText(args.db, args.sessionId);
+        const deferredNoteText = getNoteNudgeText(args.db, args.sessionId);
         if (deferredNoteText && canInjectDeferredNoteNudge) {
             appendSupplementalNudgeToAssistant(
                 args.messages,

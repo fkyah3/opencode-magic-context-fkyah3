@@ -27,28 +27,30 @@ export function enqueueDream(
     projectPath: string,
     reason: string,
 ): DreamQueueEntry | null {
-    const existing = db
-        .query<{ id: number }, [string]>(
-            "SELECT id FROM dream_queue WHERE project_path = ? AND started_at IS NULL",
-        )
-        .get(projectPath);
-
-    if (existing) {
-        return null; // already queued
-    }
-
     const now = Date.now();
-    const result = db
-        .prepare("INSERT INTO dream_queue (project_path, reason, enqueued_at) VALUES (?, ?, ?)")
-        .run(projectPath, reason, now);
+    return db.transaction(() => {
+        const existing = db
+            .query<{ id: number }, [string]>(
+                "SELECT id FROM dream_queue WHERE project_path = ? AND started_at IS NULL",
+            )
+            .get(projectPath);
 
-    return {
-        id: Number(result.lastInsertRowid),
-        projectPath,
-        reason,
-        enqueuedAt: now,
-        startedAt: null,
-    };
+        if (existing) {
+            return null; // already queued
+        }
+
+        const result = db
+            .prepare("INSERT INTO dream_queue (project_path, reason, enqueued_at) VALUES (?, ?, ?)")
+            .run(projectPath, reason, now);
+
+        return {
+            id: Number(result.lastInsertRowid),
+            projectPath,
+            reason,
+            enqueuedAt: now,
+            startedAt: null,
+        };
+    })();
 }
 
 /** Peek at the next unstarted entry without claiming it. */

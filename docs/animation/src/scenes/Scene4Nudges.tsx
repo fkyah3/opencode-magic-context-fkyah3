@@ -6,6 +6,7 @@ import {
   PANEL_H,
   SCENE_4_DURATION,
   MESSAGE_STAGGER_FAST,
+  INTRO_DURATION,
 } from "../constants";
 import { SkeletonMessage } from "../components/SkeletonMessage";
 import { ContextBar } from "../components/ContextBar";
@@ -25,8 +26,16 @@ const NUDGE_MESSAGES = Array.from({ length: 20 }, (_, i) => ({
 }));
 
 export const Scene4Nudges: React.FC = () => {
-  const frame = useCurrentFrame();
-  const sceneStartFrame = 0;
+  const globalFrame = useCurrentFrame();
+  const frame = globalFrame - INTRO_DURATION;
+
+  // UI fade in
+  const uiOpacity = interpolate(
+    frame,
+    [0, 15],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
 
   // Frame ranges
   const NUDGE_55_ENTER = 30;
@@ -74,6 +83,9 @@ export const Scene4Nudges: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: COLORS.bg }}>
+      {/* Scene caption (Title Card) */}
+      <SceneCaption text="Escalating nudges before you hit the wall." frame={globalFrame} />
+
       {/* Title */}
       <div
         style={{
@@ -85,6 +97,7 @@ export const Scene4Nudges: React.FC = () => {
           flexDirection: "column",
           alignItems: "center",
           gap: 4,
+          opacity: uiOpacity,
         }}
       >
         <div
@@ -113,28 +126,34 @@ export const Scene4Nudges: React.FC = () => {
 
       {/* Nudge banners */}
       {frame >= NUDGE_55_ENTER && frame < NUDGE_55_EXIT && (
-        <NudgeBanner
-          level="gentle"
-          pct={55}
-          enterFrame={NUDGE_55_ENTER}
-          exitFrame={NUDGE_55_EXIT}
-        />
+        <div style={{ opacity: uiOpacity }}>
+          <NudgeBanner
+            level="gentle"
+            pct={55}
+            enterFrame={NUDGE_55_ENTER}
+            exitFrame={NUDGE_55_EXIT}
+          />
+        </div>
       )}
       {frame >= NUDGE_65_ENTER && frame < NUDGE_65_EXIT && (
-        <NudgeBanner
-          level="bolder"
-          pct={65}
-          enterFrame={NUDGE_65_ENTER}
-          exitFrame={NUDGE_65_EXIT}
-        />
+        <div style={{ opacity: uiOpacity }}>
+          <NudgeBanner
+            level="bolder"
+            pct={65}
+            enterFrame={NUDGE_65_ENTER}
+            exitFrame={NUDGE_65_EXIT}
+          />
+        </div>
       )}
       {frame >= NUDGE_80_ENTER && frame < NUDGE_80_EXIT && (
-        <NudgeBanner
-          level="critical"
-          pct={80}
-          enterFrame={NUDGE_80_ENTER}
-          exitFrame={NUDGE_80_EXIT}
-        />
+        <div style={{ opacity: uiOpacity }}>
+          <NudgeBanner
+            level="critical"
+            pct={80}
+            enterFrame={NUDGE_80_ENTER}
+            exitFrame={NUDGE_80_EXIT}
+          />
+        </div>
       )}
 
       {/* Main panel */}
@@ -150,6 +169,7 @@ export const Scene4Nudges: React.FC = () => {
           borderRadius: 16,
           boxShadow: "0 2px 20px rgba(0,0,0,0.3)",
           overflow: "hidden",
+          opacity: uiOpacity,
         }}
       >
         {/* Chrome bar */}
@@ -199,6 +219,7 @@ export const Scene4Nudges: React.FC = () => {
             position: "absolute",
             top: panelTop + PANEL_H - 60,
             left: panelLeft + 20,
+            opacity: uiOpacity,
           }}
         >
           <CommandChip
@@ -215,18 +236,11 @@ export const Scene4Nudges: React.FC = () => {
           bottom: 42,
           left: "50%",
           transform: "translateX(-50%)",
+          opacity: uiOpacity,
         }}
       >
         <ContextBar pct={contextPct} />
       </div>
-
-      {/* Scene caption */}
-      <SceneCaption
-        text="Escalating nudges before you hit the wall."
-        frame={frame}
-        sceneStartFrame={sceneStartFrame}
-        sceneDuration={SCENE_4_DURATION}
-      />
     </AbsoluteFill>
   );
 };

@@ -6,6 +6,7 @@ import {
   PANEL_H,
   SCENE_2_DURATION,
   SCENE2_MESSAGES,
+  INTRO_DURATION,
 } from "../constants";
 import { SkeletonMessage } from "../components/SkeletonMessage";
 import { ContextBar } from "../components/ContextBar";
@@ -17,9 +18,9 @@ import { CommandChip } from "../components/CommandChip";
 // "Drop bloat, not context." — Select and drop tool outputs
 
 export const Scene2Reduce: React.FC = () => {
-  const frame = useCurrentFrame();
+  const globalFrame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const sceneStartFrame = 0;
+  const frame = globalFrame - INTRO_DURATION;
 
   // Frame ranges (relative to scene start)
   const NUDGE_ENTER = 10;
@@ -67,12 +68,31 @@ export const Scene2Reduce: React.FC = () => {
       })
     : 0;
 
+  // UI fade in (since panel doesn't re-enter in Scene 2)
+  const uiOpacity = interpolate(
+    frame,
+    [0, 15],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+
   // Panel position
   const panelLeft = (1280 - PANEL_W) / 2;
   const panelTop = 100;
 
+  // UI fade out for seamless loop back to Scene 0 (for GIF)
+  const sceneEndFade = interpolate(
+    globalFrame,
+    [SCENE_2_DURATION - 15, SCENE_2_DURATION],
+    [1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+
   return (
-    <AbsoluteFill style={{ background: COLORS.bg }}>
+    <AbsoluteFill style={{ background: COLORS.bg, opacity: sceneEndFade }}>
+      {/* Scene caption (Title Card) */}
+      <SceneCaption text="Drop bloat, not context." frame={globalFrame} />
+
       {/* Title */}
       <div
         style={{
@@ -84,6 +104,7 @@ export const Scene2Reduce: React.FC = () => {
           flexDirection: "column",
           alignItems: "center",
           gap: 4,
+          opacity: uiOpacity,
         }}
       >
         <div
@@ -112,12 +133,14 @@ export const Scene2Reduce: React.FC = () => {
 
       {/* Nudge toast */}
       {frame >= NUDGE_ENTER && frame < NUDGE_EXIT && (
-        <NudgeBanner
-          level="gentle"
-          pct={62}
-          enterFrame={NUDGE_ENTER}
-          exitFrame={NUDGE_EXIT}
-        />
+        <div style={{ opacity: uiOpacity }}>
+          <NudgeBanner
+            level="gentle"
+            pct={62}
+            enterFrame={NUDGE_ENTER}
+            exitFrame={NUDGE_EXIT}
+          />
+        </div>
       )}
 
       {/* Main panel */}
@@ -133,6 +156,7 @@ export const Scene2Reduce: React.FC = () => {
           borderRadius: 16,
           boxShadow: "0 2px 20px rgba(0,0,0,0.3)",
           overflow: "hidden",
+          opacity: uiOpacity,
         }}
       >
         {/* Chrome bar */}
@@ -186,6 +210,7 @@ export const Scene2Reduce: React.FC = () => {
             position: "absolute",
             top: panelTop + 200,
             left: panelLeft + PANEL_W / 2 - 60,
+            opacity: uiOpacity,
           }}
         >
           <CommandChip
@@ -203,6 +228,7 @@ export const Scene2Reduce: React.FC = () => {
           bottom: 42,
           left: "50%",
           transform: "translateX(-50%)",
+          opacity: uiOpacity,
         }}
       >
         <ContextBar pct={contextPct} />
@@ -224,14 +250,6 @@ export const Scene2Reduce: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Scene caption */}
-      <SceneCaption
-        text="Drop bloat, not context."
-        frame={frame}
-        sceneStartFrame={sceneStartFrame}
-        sceneDuration={SCENE_2_DURATION}
-      />
     </AbsoluteFill>
   );
 };

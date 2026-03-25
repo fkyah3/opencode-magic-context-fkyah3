@@ -78,6 +78,7 @@ export interface MagicContextDeps {
 
 function notifyMagicContextDisabled(client: PluginContext["client"], reason: string): void {
     const detail = reason.trim();
+    // Intentional: feature-detection cast for optional/experimental OpenCode tui.showToast API
     const c = client as {
         tui?: {
             showToast?: (input: {
@@ -190,7 +191,6 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         db,
         nudgePlacements,
         onSessionCacheInvalidated: deps.onSessionCacheInvalidated,
-        client: deps.client,
     });
 
     const runDreamQueueInBackground = (): void => {

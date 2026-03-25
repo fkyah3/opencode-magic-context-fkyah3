@@ -371,7 +371,8 @@ export function getRecompStaging(db: Database, sessionId: string): RecompStaging
 
     const factRows = db
         .prepare("SELECT category, content FROM recomp_facts WHERE session_id = ?")
-        .all(sessionId) as Array<{ category: string; content: string }>;
+        .all(sessionId)
+        .filter(isRecompFactRow);
 
     const maxPass = Math.max(...compartmentRows.map((r) => r.pass_number));
     const lastEnd = compartmentRows[compartmentRows.length - 1]?.end_message ?? 0;
@@ -468,10 +469,18 @@ function isRecompCompartmentRow(row: unknown): row is RecompCompartmentRow {
         typeof candidate.sequence === "number" &&
         typeof candidate.start_message === "number" &&
         typeof candidate.end_message === "number" &&
+        typeof candidate.start_message_id === "string" &&
+        typeof candidate.end_message_id === "string" &&
         typeof candidate.title === "string" &&
         typeof candidate.content === "string" &&
         typeof candidate.pass_number === "number"
     );
+}
+
+function isRecompFactRow(row: unknown): row is { category: string; content: string } {
+    if (row === null || typeof row !== "object") return false;
+    const candidate = row as Record<string, unknown>;
+    return typeof candidate.category === "string" && typeof candidate.content === "string";
 }
 
 export function escapeXmlAttr(s: string): string {

@@ -10,15 +10,15 @@ export const Scene0Hook: React.FC = () => {
 
   // Frame ranges
   const PROMISE_START = 0;
-  const PROMISE_END = 30;
-  const FAST_FORWARD_START = 30;
-  const FAST_FORWARD_END = 50;
-  const FORGOTTEN_START = 50;
-  const FORGOTTEN_END = 68;
-  const PULSE_START = 68;
-  const PULSE_END = 78;
-  const TITLE_START = 78;
-  const TITLE_END = 90;
+  const PROMISE_END = 60;       // slower typing (2s)
+  const FAST_FORWARD_START = 70; // hold 10 frames
+  const FAST_FORWARD_END = 80;  // 10 frames blur
+  const FORGOTTEN_START = 80;
+  const FORGOTTEN_END = 100;    // 20 frames AI reply
+  const PULSE_START = 100;
+  const PULSE_END = 106;        // 6 frames pulse
+  const TITLE_START = 106;
+  const TITLE_END = 120;        // 14 frames title hold
 
   // Promise message typing animation
   const promiseText = "I'll refactor the auth module after we finish the API.";
@@ -34,7 +34,7 @@ export const Scene0Hook: React.FC = () => {
   // Fast-forward blur effect
   const fastForwardOpacity = interpolate(
     frame,
-    [FAST_FORWARD_START, FAST_FORWARD_START + 5, FAST_FORWARD_END - 5, FAST_FORWARD_END],
+    [FAST_FORWARD_START, FAST_FORWARD_START + 3, FAST_FORWARD_END - 3, FAST_FORWARD_END],
     [0, 1, 1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );

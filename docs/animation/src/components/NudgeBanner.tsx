@@ -72,7 +72,7 @@ export const NudgeBanner: React.FC<NudgeBannerProps> = ({
     <div
       style={{
         position: "absolute",
-        top: 20,
+        top: 80,
         left: "50%",
         transform: `translateX(-50%) translateY(${translateY}px)`,
         opacity: opacity * exitProgress,

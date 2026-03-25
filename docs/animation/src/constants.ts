@@ -4,33 +4,26 @@ export const COMP_HEIGHT = 720;
 export const FPS = 30;
 
 // Full animation: 45s = 1350 frames
-export const FULL_DURATION_FRAMES = 1350;
-// GIF loop: 12s = 360 frames (Scenes 0-2)
-export const LOOP_DURATION_FRAMES = 360;
+export const FULL_DURATION_FRAMES = 2190;
+// GIF loop: 21s = 630 frames (Scenes 0-2)
+export const LOOP_DURATION_FRAMES = 630;
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 export const PANEL_W = 660;
 export const PANEL_H = 460;
 
-// ─── Scene boundaries (frames) for full 45s animation ─────────────────────────
-export const SCENE_0_START = 0;      // The Hook (0-90, 3s)
-export const SCENE_1_START = 90;     // Tagging (90-210, 4s)
-export const SCENE_2_START = 210;    // Surgical Dropping (210-360, 5s)
-export const SCENE_3_START = 360;    // Historian (360-690, 11s)
-export const SCENE_4_START = 690;    // Nudge Escalation (690-870, 6s)
-export const SCENE_5_START = 870;    // Cross-Session Memory (870-1110, 8s)
-export const SCENE_6_START = 1110;   // Dreamer (1110-1230, 4s)
-export const SCENE_7_START = 1230;   // Resolution (1230-1350, 4s)
+// ─── Pacing ───────────────────────────────────────────────────────────────────
+export const INTRO_DURATION = 75; // 2.5s narrative title card before scene
 
-// Scene durations in frames
-export const SCENE_0_DURATION = 90;
-export const SCENE_1_DURATION = 120;
-export const SCENE_2_DURATION = 150;
-export const SCENE_3_DURATION = 330;
-export const SCENE_4_DURATION = 180;
-export const SCENE_5_DURATION = 240;
-export const SCENE_6_DURATION = 120;
-export const SCENE_7_DURATION = 120;
+// ─── Scene durations (frames) ─────────────────────────────────────────────────
+export const SCENE_0_DURATION = 120; // 4s
+export const SCENE_1_DURATION = 225; // 7.5s (75 intro + 150 ui)
+export const SCENE_2_DURATION = 285; // 9.5s (75 intro + 210 ui)
+export const SCENE_3_DURATION = 465; // 15.5s (75 intro + 390 ui)
+export const SCENE_4_DURATION = 315; // 10.5s (75 intro + 240 ui)
+export const SCENE_5_DURATION = 345; // 11.5s (75 intro + 270 ui)
+export const SCENE_6_DURATION = 255; // 8.5s (75 intro + 180 ui)
+export const SCENE_7_DURATION = 180; // 6s
 
 // ─── Per-message stagger ─────────────────────────────────────────────────────
 export const MESSAGE_STAGGER = 10;

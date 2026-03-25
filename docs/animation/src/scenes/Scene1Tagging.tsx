@@ -7,6 +7,7 @@ import {
   SCENE_1_DURATION,
   MESSAGE_STAGGER,
   SKELETON_MESSAGES,
+  INTRO_DURATION,
 } from "../constants";
 import { SkeletonMessage } from "../components/SkeletonMessage";
 import { ContextBar } from "../components/ContextBar";
@@ -16,8 +17,8 @@ import { SceneCaption } from "../components/SceneCaption";
 // "Tag everything." — Messages appear with §N§ tags
 
 export const Scene1Tagging: React.FC = () => {
-  const frame = useCurrentFrame();
-  const sceneStartFrame = 0; // Relative to scene start
+  const globalFrame = useCurrentFrame();
+  const frame = globalFrame - INTRO_DURATION; // internal UI frame
 
   // Calculate visible messages based on stagger
   const numVisible = SKELETON_MESSAGES.filter(
@@ -46,19 +47,20 @@ export const Scene1Tagging: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: COLORS.bg }}>
-      {/* Title */}
-      <div
-        style={{
-          position: "absolute",
-          top: 30,
-          left: 0,
-          right: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
+        {/* Title */}
+        <div
+          style={{
+            position: "absolute",
+            top: 30,
+            left: 0,
+            right: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 4,
+            opacity: panelOpacity, // Fade in with the panel
+          }}
+        >
         <div
           style={{
             fontFamily: FONT_FAMILY,
@@ -148,6 +150,7 @@ export const Scene1Tagging: React.FC = () => {
           bottom: 42,
           left: "50%",
           transform: "translateX(-50%)",
+          opacity: panelOpacity, // Fade in with the panel
         }}
       >
         <ContextBar
@@ -157,13 +160,8 @@ export const Scene1Tagging: React.FC = () => {
         />
       </div>
 
-      {/* Scene caption */}
-      <SceneCaption
-        text="Tag everything."
-        frame={frame}
-        sceneStartFrame={sceneStartFrame}
-        sceneDuration={SCENE_1_DURATION}
-      />
+      {/* Scene caption (Title Card) */}
+      <SceneCaption text="Tag everything." frame={globalFrame} />
     </AbsoluteFill>
   );
 };

@@ -5,6 +5,7 @@ import {
   FONT_FAMILY_MONO,
   SCENE_6_DURATION,
   DREAMER_PILLS,
+  INTRO_DURATION,
 } from "../constants";
 import { ContextBar } from "../components/ContextBar";
 import { SceneCaption } from "../components/SceneCaption";
@@ -14,9 +15,17 @@ import { AgentPanel } from "../components/AgentPanel";
 // "Overnight, Dreamer cleans house."
 
 export const Scene6Dreamer: React.FC = () => {
-  const frame = useCurrentFrame();
+  const globalFrame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const sceneStartFrame = 0;
+  const frame = globalFrame - INTRO_DURATION;
+
+  // UI fade in
+  const uiOpacity = interpolate(
+    frame,
+    [0, 15],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
 
   // Frame ranges
   const NIGHT_START = 10;
@@ -75,6 +84,9 @@ export const Scene6Dreamer: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background }}>
+      {/* Scene caption (Title Card) */}
+      <SceneCaption text="Overnight maintenance while you sleep." frame={globalFrame} />
+
       {/* Title */}
       <div
         style={{
@@ -86,6 +98,7 @@ export const Scene6Dreamer: React.FC = () => {
           flexDirection: "column",
           alignItems: "center",
           gap: 4,
+          opacity: uiOpacity,
         }}
       >
         <div
@@ -122,7 +135,7 @@ export const Scene6Dreamer: React.FC = () => {
             display: "flex",
             alignItems: "center",
             gap: 8,
-            opacity: nightProgress,
+            opacity: nightProgress * uiOpacity,
           }}
         >
           <span style={{ fontSize: 20 }}>☾</span>
@@ -140,7 +153,7 @@ export const Scene6Dreamer: React.FC = () => {
 
       {/* Dreamer panel */}
       {frame >= DREAMER_ENTER && frame < DREAMER_EXIT + 20 && (
-        <div style={{ position: "absolute", left: panelLeft, top: panelTop }}>
+        <div style={{ position: "absolute", left: panelLeft, top: panelTop, opacity: uiOpacity }}>
           <AgentPanel
             type="dreamer"
             enterProgress={dreamerEnterP}
@@ -260,18 +273,11 @@ export const Scene6Dreamer: React.FC = () => {
           bottom: 42,
           left: "50%",
           transform: "translateX(-50%)",
+          opacity: uiOpacity,
         }}
       >
         <ContextBar pct={30} />
       </div>
-
-      {/* Scene caption */}
-      <SceneCaption
-        text="Overnight maintenance while you sleep."
-        frame={frame}
-        sceneStartFrame={sceneStartFrame}
-        sceneDuration={SCENE_6_DURATION}
-      />
     </AbsoluteFill>
   );
 };

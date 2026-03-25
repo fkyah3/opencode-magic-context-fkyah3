@@ -44,7 +44,6 @@ export interface EventHandlerDeps {
     };
     tagger: Tagger;
     db: ReturnType<typeof import("../../features/magic-context/storage").openDatabase>;
-    client: unknown;
 }
 
 function evictExpiredUsageEntries(contextUsageMap: Map<string, ContextUsageEntry>): void {

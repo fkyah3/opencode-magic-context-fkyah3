@@ -13,9 +13,8 @@ import { Scene2Reduce } from "./scenes/Scene2Reduce";
 
 // Scene start frames (cumulative)
 const SCENE_0_START = 0;
-const SCENE_1_START = SCENE_0_START + SCENE_0_DURATION; // 90
-const SCENE_2_START = SCENE_1_START + SCENE_1_DURATION; // 210
-// Total: 360 frames (12s @ 30fps)
+const SCENE_1_START = SCENE_0_START + SCENE_0_DURATION;
+const SCENE_2_START = SCENE_1_START + SCENE_1_DURATION;
 
 // This is the hero GIF loop - Scenes 0-2 only
 // Designed to loop seamlessly from end back to beginning

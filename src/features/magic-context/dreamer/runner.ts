@@ -87,9 +87,16 @@ export async function runDream(args: {
             const taskStartedAt = Date.now();
             let agentSessionId: string | null = null;
             // Renew lease periodically while the LLM task runs (can take 5+ min on slow models)
+            let leaseRenewalAborted = false;
             const leaseRenewalInterval = setInterval(() => {
-                if (!renewLease(args.db, holderId)) {
-                    log(`[dreamer] task ${taskName}: background lease renewal failed`);
+                try {
+                    if (!renewLease(args.db, holderId)) {
+                        log(`[dreamer] task ${taskName}: lease renewal failed — aborting task`);
+                        leaseRenewalAborted = true;
+                    }
+                } catch (err) {
+                    log(`[dreamer] task ${taskName}: lease renewal threw — aborting task: ${err}`);
+                    leaseRenewalAborted = true;
                 }
             }, 60_000);
 
@@ -140,6 +147,12 @@ export async function runDream(args: {
                     },
                     { timeoutMs: args.taskTimeoutMinutes * 60 * 1000 },
                 );
+
+                if (leaseRenewalAborted) {
+                    throw new Error(
+                        "Lease lost during task execution — aborting to prevent dual-execution",
+                    );
+                }
 
                 const messagesResponse = await args.client.session.messages({
                     path: { id: agentSessionId },

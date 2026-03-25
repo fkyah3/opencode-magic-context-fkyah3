@@ -135,6 +135,7 @@ async function runHistorianPrompt(args: {
 
         const messagesResponse = await client.session.messages({
             path: { id: agentSessionId },
+            query: { directory: sessionDirectory },
         });
         const messages = shared.normalizeSDKResponse(messagesResponse, [] as unknown[], {
             preferResponseOnMissingData: true,

@@ -50,7 +50,7 @@ export function onNoteTrigger(sessionId: string, _trigger: NoteNudgeTrigger): vo
  *
  * Call from the nudge injection path (transform or nudger).
  */
-export function getNotNudgeText(db: Database, sessionId: string): string | null {
+export function getNoteNudgeText(db: Database, sessionId: string): string | null {
     const state = getState(sessionId);
 
     if (!state.triggerPending) return null;

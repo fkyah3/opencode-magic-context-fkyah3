@@ -157,6 +157,7 @@ export function createEventHook(args: {
         try {
             const model = args.liveModelBySession.get(sessionId);
             const variant = args.variantBySession.get(sessionId);
+            // Intentional: feature-detection cast for optional/experimental OpenCode promptAsync API
             const c = args.client as {
                 session: { promptAsync?: (opts: unknown) => Promise<unknown> };
             };
