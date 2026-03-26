@@ -30,9 +30,7 @@ export function enqueueDream(
     const now = Date.now();
     return db.transaction(() => {
         const existing = db
-            .query<{ id: number }, [string]>(
-                "SELECT id FROM dream_queue WHERE project_path = ? AND started_at IS NULL",
-            )
+            .query<{ id: number }, [string]>("SELECT id FROM dream_queue WHERE project_path = ?")
             .get(projectPath);
 
         if (existing) {

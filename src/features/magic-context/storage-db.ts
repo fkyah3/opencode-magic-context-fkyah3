@@ -112,6 +112,15 @@ export function initializeDatabase(db: Database): void {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS dream_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_path TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      enqueued_at INTEGER NOT NULL,
+      started_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_dream_queue_project ON dream_queue(project_path);
+
     CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
       content,
       category,

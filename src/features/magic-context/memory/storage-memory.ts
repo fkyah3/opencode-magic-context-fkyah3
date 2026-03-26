@@ -467,17 +467,19 @@ export function updateMemoryContent(
     content: string,
     normalizedHash: string,
 ): void {
-    getUpdateMemoryContentStatement(db).run(content, normalizedHash, Date.now(), id);
+    db.transaction(() => {
+        getUpdateMemoryContentStatement(db).run(content, normalizedHash, Date.now(), id);
 
-    // Invalidate stale embedding — backfill will regenerate with new content.
-    // Uses the same prepared statement pool as deleteEmbedding() in storage-memory-embeddings.ts,
-    // but we inline the query here to avoid a circular import.
-    let stmt = deleteEmbeddingOnContentUpdateStatements.get(db);
-    if (!stmt) {
-        stmt = db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?");
-        deleteEmbeddingOnContentUpdateStatements.set(db, stmt);
-    }
-    stmt.run(id);
+        // Invalidate stale embedding — backfill will regenerate with new content.
+        // Uses the same prepared statement pool as deleteEmbedding() in storage-memory-embeddings.ts,
+        // but we inline the query here to avoid a circular import.
+        let stmt = deleteEmbeddingOnContentUpdateStatements.get(db);
+        if (!stmt) {
+            stmt = db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?");
+            deleteEmbeddingOnContentUpdateStatements.set(db, stmt);
+        }
+        stmt.run(id);
+    })();
 }
 
 export function supersededMemory(db: Database, id: number, supersededById: number): void {

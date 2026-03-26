@@ -81,34 +81,9 @@ export function checkScheduleAndEnqueue(db: Database, schedule: string): number 
         return 0;
     }
 
-    // Don't enqueue if a dream already ran during this window today
-    const lastDreamAtStr = getDreamState(db, "last_dream_at");
-    if (lastDreamAtStr) {
-        const lastDreamAt = Number(lastDreamAtStr) || 0;
-        const window = parseScheduleWindow(schedule);
-        if (window) {
-            const now = new Date();
-            const todayWindowStart = new Date(now);
-            todayWindowStart.setHours(
-                Math.floor(window.startMinutes / 60),
-                window.startMinutes % 60,
-                0,
-                0,
-            );
-
-            // If window is overnight and we're before midnight, window started yesterday
-            if (
-                window.startMinutes > window.endMinutes &&
-                now.getHours() * 60 + now.getMinutes() < window.endMinutes
-            ) {
-                todayWindowStart.setDate(todayWindowStart.getDate() - 1);
-            }
-
-            if (lastDreamAt >= todayWindowStart.getTime()) {
-                return 0; // already dreamed during this window
-            }
-        }
-    }
+    // Per-project dream gating is handled by findProjectsNeedingDream() which
+    // checks per-project last_dream_at keys. No global gate needed — each project
+    // is independently scheduled based on its own last dream time.
 
     const projects = findProjectsNeedingDream(db);
     if (projects.length === 0) {

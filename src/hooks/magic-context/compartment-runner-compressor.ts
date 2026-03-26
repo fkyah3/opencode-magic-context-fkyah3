@@ -276,14 +276,37 @@ async function runCompressorPass(args: CompressorPassArgs): Promise<Array<{
         }
 
         // Map parsed compartments to stored format with message IDs
-        return parsed.compartments.map((pc) => ({
-            startMessage: pc.startMessage,
-            endMessage: pc.endMessage,
-            startMessageId: messageIdMap.get(pc.startMessage) ?? "",
-            endMessageId: messageIdMap.get(pc.endMessage) ?? "",
-            title: pc.title,
-            content: pc.content,
-        }));
+        const mapped = parsed.compartments.map((pc) => {
+            const startId = messageIdMap.get(pc.startMessage) ?? "";
+            const endId = messageIdMap.get(pc.endMessage) ?? "";
+            if (!startId || !endId) {
+                sessionLog(
+                    sessionId,
+                    `compressor: messageId miss for ordinals ${pc.startMessage}→${pc.endMessage} (startId=${startId || "MISSING"}, endId=${endId || "MISSING"})`,
+                );
+            }
+            return {
+                startMessage: pc.startMessage,
+                endMessage: pc.endMessage,
+                startMessageId: startId,
+                endMessageId: endId,
+                title: pc.title,
+                content: pc.content,
+            };
+        });
+
+        // If the final compartment's endMessageId is empty, the compressor introduced
+        // a boundary we can't anchor. Reject to avoid broken visible-prefix trimming.
+        const last = mapped[mapped.length - 1];
+        if (last && !last.endMessageId) {
+            sessionLog(
+                sessionId,
+                "compressor: rejecting — final compartment has empty endMessageId",
+            );
+            return null;
+        }
+
+        return mapped;
     } catch (error: unknown) {
         sessionLog(sessionId, "compressor: historian call failed:", getErrorMessage(error));
         return null;

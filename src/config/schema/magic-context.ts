@@ -169,7 +169,7 @@ export const MagicContextConfigSchema = z
                     .catchall(z.number().min(35).max(95)),
             ])
             .default(DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE),
-        /** Number of recent tags to protect from dropping (min: 1, max: 20, default: 5) */
+        /** Number of recent tags to protect from dropping (min: 1, max: 20, default: 20) */
         protected_tags: z.number().min(1).max(20).optional(),
         /** Auto-drop tool outputs older than N tags during queue execution (default: 100) */
         auto_drop_tool_age: z.number().min(10).default(100),

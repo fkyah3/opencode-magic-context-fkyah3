@@ -100,8 +100,10 @@ export async function runDream(args: {
     }
 
     const deadline = startedAt + args.maxRuntimeMinutes * 60 * 1000;
-    const lastDreamAt = getDreamState(args.db, "last_dream_at");
-    log(`[dreamer] last dream at: ${lastDreamAt ?? "never"}`);
+    const lastDreamAt =
+        getDreamState(args.db, `last_dream_at:${args.projectPath}`) ??
+        getDreamState(args.db, "last_dream_at");
+    log(`[dreamer] last dream at: ${lastDreamAt ?? "never"} (project=${args.projectPath})`);
 
     try {
         for (const taskName of args.tasks) {
@@ -234,9 +236,13 @@ export async function runDream(args: {
     }
 
     result.finishedAt = Date.now();
-    // Store per-project dream time (for multi-project scheduling) and global fallback
-    setDreamState(args.db, `last_dream_at:${args.projectPath}`, String(result.finishedAt));
-    setDreamState(args.db, "last_dream_at", String(result.finishedAt));
+    // Only update dream timestamps when at least one task succeeded — failed runs
+    // should not block re-scheduling for the project.
+    const hasSuccessfulTask = result.tasks.some((t) => !t.error);
+    if (hasSuccessfulTask) {
+        setDreamState(args.db, `last_dream_at:${args.projectPath}`, String(result.finishedAt));
+        setDreamState(args.db, "last_dream_at", String(result.finishedAt));
+    }
     const totalDuration = ((result.finishedAt - startedAt) / 1000).toFixed(1);
     const succeeded = result.tasks.filter((t) => !t.error).length;
     const failed = result.tasks.filter((t) => t.error).length;

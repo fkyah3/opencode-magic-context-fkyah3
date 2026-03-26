@@ -107,7 +107,7 @@ export function readSessionChunk(
         if (!currentBlock) return true;
         const blockText = formatBlock(currentBlock);
         const blockTokens = estimateTokens(blockText);
-        if (totalTokens + blockTokens > tokenBudget) {
+        if (totalTokens + blockTokens > tokenBudget && totalTokens > 0) {
             return false;
         }
 
