@@ -51,9 +51,25 @@ Higher-tier models with longer cache windows benefit from a longer TTL. Setting 
 
 ---
 
+## Model Resolution
+
+Each agent has a built-in fallback chain tried in order when no model is explicitly configured. If you have a GitHub Copilot subscription, Copilot-routed models are preferred for historian and dreamer since they use request-based pricing — ideal for single-prompt background work.
+
+| Agent | Fallback Chain (first available wins) |
+|-------|---------------------------------------|
+| **Historian** | `github-copilot/claude-sonnet-4-6` → `anthropic/claude-sonnet-4-6` → `opencode-go/minimax-m2.7` → `zai-coding-plan/glm-5` → `openai/gpt-5.4` → `google/gemini-3.1-pro` |
+| **Dreamer** | `github-copilot/claude-sonnet-4-6` → `anthropic/claude-sonnet-4-6` → `google/gemini-3-flash` → `zai-coding-plan/glm-5` → `opencode-go/minimax-m2.7` → `openai/gpt-5.4-mini` |
+| **Sidekick** | `cerebras/qwen-3-235b-a22b-instruct-2507` → `opencode/gpt-5-nano` → `google/gemini-3-flash` → `openai/gpt-5.4-mini` |
+
+Setting `model` in any agent config overrides the fallback chain entirely. Setting `fallback_models` replaces the built-in chain with your custom list.
+
+> **Tip — Dreamer with local models:** Since the dreamer runs during idle time (typically overnight), it works well with local models. Even slower ones like `ollama/mlx-qwen3.5-27b-claude-4.6-opus-reasoning-distilled` are fine — there's no user waiting.
+
+---
+
 ## `historian`
 
-Configures the background historian agent that compresses session history into compartments. Optional — the plugin has a built-in default fallback chain.
+Configures the background historian agent that compresses session history into compartments.
 
 ```jsonc
 {
@@ -173,14 +189,15 @@ Cross-session memory settings. All memories are scoped to the current project (i
 
 ## `sidekick`
 
-Optional prompt augmenter that runs on `/ctx-aug`. Sidekick is a hidden OpenCode subagent that creates an ephemeral child session, searches memories with `ctx_memory`, and returns a focused context briefing.
+Optional prompt augmenter that runs on `/ctx-aug`. Sidekick is a hidden OpenCode subagent that creates an ephemeral child session, searches memories with `ctx_memory`, and returns a focused context briefing. 
+It is useful when starting a new session. It's better to choose a fast and cheap model, even small local models.
 
 ```jsonc
 {
   "sidekick": {
     "enabled": true,
-    "model": "github-copilot/gpt-5.4",
-    "fallback_models": ["anthropic/claude-sonnet-4-6"],
+    "model": "github-copilot/grok-code-fast-1",
+    "fallback_models": ["cerebras/qwen-3-235b-a22b-instruct-2507"],
     "timeout_ms": 30000
   }
 }
