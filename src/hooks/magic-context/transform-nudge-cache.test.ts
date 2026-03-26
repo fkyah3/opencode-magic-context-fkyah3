@@ -491,14 +491,13 @@ describe("createTransform nudge cache handling", () => {
         });
     });
 
-    it("clears sticky turn reminder when messages contain a recent ctx_reduce call", async () => {
-        //#given
-        useTempDataHome("context-transform-sticky-suppress-by-message-");
-        const scheduler: Scheduler = { shouldExecute: mock(() => "defer" as const) };
+    it("keeps sticky turn reminder on cache-safe defer pass even when ctx_reduce is in recent messages", async () => {
+        //#given — scheduler defers, so this is a cache-safe pass
+        useTempDataHome("context-transform-sticky-keep-on-defer-");
         const db = openDatabase();
         const transform = createTransform({
             tagger: createTagger(),
-            scheduler,
+            scheduler: { shouldExecute: mock(() => "defer" as const) },
             contextUsageMap: new Map<string, { usage: ContextUsage; updatedAt: number }>([
                 [
                     "ses-1",
@@ -521,7 +520,6 @@ describe("createTransform nudge cache handling", () => {
             '\n\n<instruction name="ctx_reduce_turn_cleanup">sticky reminder</instruction>',
         );
 
-        // Messages include a ctx_reduce tool call — agent already reduced
         const messages: TestMessage[] = [
             {
                 info: { id: "m-user", role: "user", sessionID: "ses-1" },
@@ -543,7 +541,62 @@ describe("createTransform nudge cache handling", () => {
         //#when
         await transform({}, { messages });
 
-        //#then — reminder should be cleared from DB and NOT injected
+        //#then — reminder stays in DB and keeps being reinjected (cache-safe: no removal)
+        expect(firstText(messages[0]!)).toContain("sticky reminder");
+        expect(getPersistedStickyTurnReminder(db, "ses-1")).not.toBeNull();
+    });
+
+    it("clears sticky turn reminder on cache-busting execute pass when ctx_reduce is in recent messages", async () => {
+        //#given — scheduler executes, so this pass already busts cache
+        useTempDataHome("context-transform-sticky-clear-on-execute-");
+        const db = openDatabase();
+        const transform = createTransform({
+            tagger: createTagger(),
+            scheduler: { shouldExecute: mock(() => "execute" as const) },
+            contextUsageMap: new Map<string, { usage: ContextUsage; updatedAt: number }>([
+                [
+                    "ses-1",
+                    { usage: { percentage: 41, inputTokens: 80_000 }, updatedAt: Date.now() },
+                ],
+            ]),
+            nudger: () => null,
+            db,
+            nudgePlacements: createNudgePlacementStore(db),
+            flushedSessions: new Set<string>(),
+            lastHeuristicsTurnId: new Map<string, string>(),
+            clearReasoningAge: 50,
+            protectedTags: 0,
+            autoDropToolAge: 1000,
+        });
+
+        setPersistedStickyTurnReminder(
+            db,
+            "ses-1",
+            '\n\n<instruction name="ctx_reduce_turn_cleanup">sticky reminder</instruction>',
+        );
+
+        const messages: TestMessage[] = [
+            {
+                info: { id: "m-user", role: "user", sessionID: "ses-1" },
+                parts: [{ type: "text", text: "user prompt" }],
+            },
+            {
+                info: { id: "m-assistant", role: "assistant" },
+                parts: [
+                    { type: "text", text: "assistant response" },
+                    {
+                        type: "tool-invocation" as "text",
+                        callID: "reduce-call" as unknown as undefined,
+                        toolName: "ctx_reduce",
+                    } as unknown as TestMessage["parts"][0],
+                ],
+            },
+        ];
+
+        //#when
+        await transform({}, { messages });
+
+        //#then — reminder cleared from DB and NOT injected (cache already busting)
         expect(firstText(messages[0]!)).not.toContain("sticky reminder");
         expect(getPersistedStickyTurnReminder(db, "ses-1")).toBeNull();
     });

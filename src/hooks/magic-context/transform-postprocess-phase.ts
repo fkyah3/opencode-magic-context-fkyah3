@@ -19,10 +19,6 @@ import {
     renderCompartmentInjection,
 } from "./inject-compartments";
 import { getNoteNudgeText } from "./note-nudger";
-import {
-    appendSupplementalNudgeToAssistant,
-    canAppendSupplementalNudgeToAssistant,
-} from "./nudge-injection";
 import type { NudgePlacementStore } from "./nudge-placement-store";
 import type { ContextNudge } from "./nudger";
 import {
@@ -293,11 +289,15 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
 
     const pendingUserTurnReminder = getPersistedStickyTurnReminder(args.db, args.sessionId);
     if (pendingUserTurnReminder) {
-        if (args.hasRecentReduceCall) {
+        // Only clear the reminder when the pass is already cache-busting (execute/flush).
+        // Clearing on a cache-safe pass would remove text from an anchored user message,
+        // changing cached content and busting the Anthropic prompt-cache prefix.
+        const isCacheBustingPass = isExplicitFlush || shouldApplyPendingOps || shouldRunHeuristics;
+        if (args.hasRecentReduceCall && isCacheBustingPass) {
             clearPersistedStickyTurnReminder(args.db, args.sessionId);
             sessionLog(
                 args.sessionId,
-                "sticky turn reminder cleared — ctx_reduce found in recent messages",
+                "sticky turn reminder cleared — ctx_reduce found in recent messages (cache-busting pass)",
             );
         } else {
             if (pendingUserTurnReminder.messageId) {
@@ -355,19 +355,10 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
             args.nudgePlacements.clear(args.sessionId);
         }
 
-        const canInjectDeferredNoteNudge = canAppendSupplementalNudgeToAssistant(
-            args.messages,
-            args.nudgePlacements,
-            args.sessionId,
-        );
         const deferredNoteText = getNoteNudgeText(args.db, args.sessionId);
-        if (deferredNoteText && canInjectDeferredNoteNudge) {
-            appendSupplementalNudgeToAssistant(
-                args.messages,
-                `\n\n<instruction name="deferred_notes">${deferredNoteText}</instruction>`,
-                args.nudgePlacements,
-                args.sessionId,
-            );
+        if (deferredNoteText) {
+            const noteInstruction = `\n\n<instruction name="deferred_notes">${deferredNoteText}</instruction>`;
+            appendReminderToLatestUserMessage(args.messages, noteInstruction);
         }
     } else {
         args.nudgePlacements.clear(args.sessionId);
