@@ -386,10 +386,10 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
     const deferredNoteText = peekNoteNudgeText(args.db, args.sessionId);
     if (deferredNoteText) {
         const noteInstruction = `\n\n<instruction name="deferred_notes">${deferredNoteText}</instruction>`;
-        const anchored = appendReminderToLatestUserMessage(args.messages, noteInstruction);
-        if (anchored) {
-            // Only mark delivered after successful placement
-            markNoteNudgeDelivered(args.sessionId);
-        }
+        appendReminderToLatestUserMessage(args.messages, noteInstruction);
+        // Always mark delivered once text is generated — the trigger is consumed.
+        // If no user message exists, the nudge is lost for this cycle, but
+        // triggerPending must still clear to prevent firing on every subsequent pass.
+        markNoteNudgeDelivered(args.sessionId);
     }
 }
