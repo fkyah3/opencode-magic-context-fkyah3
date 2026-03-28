@@ -70,73 +70,57 @@ export function buildModelSelection(
     const result: { label: string; value: string; recommended?: boolean }[] = [];
     const added = new Set<string>();
 
-    const addIfAvailable = (pattern: string, recommended = false) => {
+    const addIfAvailable = (pattern: string, hint?: string) => {
         const matches = allModels.filter((m) => m === pattern || m.endsWith(`/${pattern}`));
         for (const m of matches) {
             if (!added.has(m)) {
                 added.add(m);
                 result.push({
-                    label: m,
+                    label: hint ? `${m} — ${hint}` : m,
                     value: m,
-                    recommended: recommended && result.length === 0,
+                    recommended: result.length === 0,
                 });
             }
         }
     };
 
     if (role === "historian") {
-        // Per-request models first — cheap, fast, good at summarization
-        addIfAvailable("claude-sonnet-4-6", true);
-        addIfAvailable("claude-sonnet-4-5");
-        addIfAvailable("gemini-3.1-pro");
-        addIfAvailable("gpt-5.4");
-        addIfAvailable("glm-5");
-        addIfAvailable("minimax-m2.7");
-
-        // Copilot-backed models (free for copilot users)
-        for (const m of allModels.filter((m) => m.startsWith("github-copilot/"))) {
-            if (!added.has(m)) {
-                added.add(m);
-                result.push({ label: `${m} (free with Copilot)`, value: m });
-            }
-        }
+        // Follow the actual fallback chain order.
+        // Per-request providers first (github-copilot) — better for historian's
+        // single long prompt/request pattern vs token-based billing.
+        addIfAvailable("github-copilot/claude-sonnet-4.6", "per-request billing");
+        addIfAvailable("anthropic/claude-sonnet-4-6");
+        addIfAvailable("github-copilot/gpt-5.4", "per-request billing");
+        addIfAvailable("openai/gpt-5.4");
+        addIfAvailable("github-copilot/gemini-3.1-pro-preview", "per-request billing");
+        addIfAvailable("opencode-go/minimax-m2.7");
+        addIfAvailable("opencode-go/glm-5");
     } else if (role === "dreamer") {
         // Local/cheap models first — dreamer runs overnight
         for (const m of allModels.filter((m) => m.startsWith("ollama/"))) {
             if (!added.has(m)) {
                 added.add(m);
-                result.push({ label: `${m} (local)`, value: m, recommended: result.length === 0 });
+                result.push({ label: `${m} — local`, value: m, recommended: result.length === 0 });
             }
         }
 
-        addIfAvailable("claude-sonnet-4-6", result.length === 0);
-        addIfAvailable("gemini-3-flash");
-        addIfAvailable("glm-5");
-        addIfAvailable("minimax-m2.7");
-        addIfAvailable("gpt-5.4-mini");
-
-        for (const m of allModels.filter((m) => m.startsWith("github-copilot/"))) {
-            if (!added.has(m)) {
-                added.add(m);
-                result.push({ label: `${m} (free with Copilot)`, value: m });
-            }
-        }
+        addIfAvailable("github-copilot/claude-sonnet-4.6", "per-request billing");
+        addIfAvailable("anthropic/claude-sonnet-4-6");
+        addIfAvailable("github-copilot/gemini-3-flash-preview", "per-request billing");
+        addIfAvailable("opencode-go/glm-5");
+        addIfAvailable("opencode-go/minimax-m2.7");
     } else if (role === "sidekick") {
         // Fast models first
         for (const m of allModels.filter((m) => m.startsWith("cerebras/"))) {
             if (!added.has(m)) {
                 added.add(m);
-                result.push({
-                    label: `${m} (fastest)`,
-                    value: m,
-                    recommended: result.length === 0,
-                });
+                result.push({ label: m, value: m, recommended: result.length === 0 });
             }
         }
 
-        addIfAvailable("gpt-5-nano");
-        addIfAvailable("gemini-3-flash");
-        addIfAvailable("gpt-5.4-mini");
+        addIfAvailable("opencode/gpt-5-nano");
+        addIfAvailable("github-copilot/gemini-3-flash-preview");
+        addIfAvailable("github-copilot/gpt-5-mini");
     }
 
     return result;

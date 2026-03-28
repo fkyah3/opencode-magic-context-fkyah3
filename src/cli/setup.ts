@@ -19,19 +19,62 @@ function ensureDir(dir: string): void {
     }
 }
 
-function stripJsoncComments(text: string): string {
-    return text.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+function stripJsoncToJson(text: string): string {
+    let result = "";
+    let i = 0;
+    let inString = false;
+    let escaped = false;
+
+    while (i < text.length) {
+        const ch = text[i];
+
+        if (escaped) {
+            result += ch;
+            escaped = false;
+            i++;
+            continue;
+        }
+
+        if (inString) {
+            if (ch === "\\") escaped = true;
+            else if (ch === '"') inString = false;
+            result += ch;
+            i++;
+            continue;
+        }
+
+        // Line comment
+        if (ch === "/" && text[i + 1] === "/") {
+            while (i < text.length && text[i] !== "\n") i++;
+            continue;
+        }
+
+        // Block comment
+        if (ch === "/" && text[i + 1] === "*") {
+            i += 2;
+            while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
+            i += 2;
+            continue;
+        }
+
+        if (ch === '"') inString = true;
+        result += ch;
+        i++;
+    }
+
+    // Strip trailing commas before } or ]
+    return result.replace(/,(\s*[}\]])/g, "$1");
 }
 
-function readJsonc(path: string): Record<string, unknown> {
+function readJsonc(path: string): Record<string, unknown> | null {
     const content = readFileSync(path, "utf-8");
     try {
-        return JSON.parse(stripJsoncComments(content));
-    } catch {
-        return {};
+        return JSON.parse(stripJsoncToJson(content));
+    } catch (err) {
+        console.error(`  ⚠ Failed to parse ${path}: ${err instanceof Error ? err.message : err}`);
+        return null;
     }
 }
-
 // ─── Config Manipulators ──────────────────────────────────
 
 function addPluginToOpenCodeConfig(configPath: string, format: "json" | "jsonc" | "none"): void {
@@ -48,6 +91,10 @@ function addPluginToOpenCodeConfig(configPath: string, format: "json" | "jsonc" 
 
     // Read existing config, merge our changes, preserve everything else
     const existing = readJsonc(configPath);
+    if (!existing) {
+        log.warn(`Could not parse ${configPath} — skipping to avoid data loss`);
+        return;
+    }
 
     // Add plugin if not present
     const plugins = (existing.plugin as string[]) ?? [];
@@ -74,11 +121,12 @@ function writeMagicContextConfig(
         dreamerModel: string | null;
         sidekickEnabled: boolean;
         sidekickModel: string | null;
+        claudeMax: boolean;
     },
 ): void {
     // Read existing config to preserve user's other settings
-    const config: Record<string, unknown> = existsSync(configPath) ? readJsonc(configPath) : {};
-
+    const config: Record<string, unknown> =
+        (existsSync(configPath) ? readJsonc(configPath) : null) ?? {};
     if (options.historianModel) {
         const historian = (config.historian as Record<string, unknown>) ?? {};
         historian.model = options.historianModel;
@@ -107,13 +155,23 @@ function writeMagicContextConfig(
         config.sidekick = sidekick;
     }
 
+    if (options.claudeMax) {
+        const cacheTtl = (config.cache_ttl as Record<string, string>) ?? {};
+        if (!cacheTtl.default) cacheTtl.default = "5m";
+        cacheTtl["anthropic/claude-sonnet-4-6"] = "59m";
+        cacheTtl["anthropic/claude-opus-4-6"] = "59m";
+        config.cache_ttl = cacheTtl;
+    }
+
     writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
-
 function disableOmoHooks(omoConfigPath: string): void {
     const config = readJsonc(omoConfigPath);
+    if (!config) {
+        log.warn(`Could not parse ${omoConfigPath} — skipping to avoid data loss`);
+        return;
+    }
     const disabledHooks = (config.disabled_hooks as string[]) ?? [];
-
     const hooksToDisable = [
         "context-window-monitor",
         "preemptive-compaction",
@@ -233,6 +291,20 @@ export async function runSetup(): Promise<number> {
         log.info("Using built-in fallback chain for sidekick");
     }
 
+    // ─── Claude Max subscription ────────────────────────
+    const hasAnthropic = allModels.some((m) => m.startsWith("anthropic/"));
+    let claudeMax = false;
+    if (hasAnthropic) {
+        log.message(
+            "Claude Max/Pro subscribers get extended prompt caching (up to 1 hour).\n" +
+                "This lets Magic Context defer context operations much longer, saving money.",
+        );
+        claudeMax = await confirm("Do you have a Claude Max or Pro subscription?", false);
+        if (claudeMax) {
+            log.success("Cache TTL set to 59m for Anthropic models");
+        }
+    }
+
     // Write magic-context config
     writeMagicContextConfig(paths.magicContextConfig, {
         historianModel,
@@ -240,6 +312,7 @@ export async function runSetup(): Promise<number> {
         dreamerModel,
         sidekickEnabled,
         sidekickModel,
+        claudeMax,
     });
     log.success(`Config written to ${paths.magicContextConfig}`);
 
