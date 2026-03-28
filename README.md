@@ -99,9 +99,9 @@ Create `magic-context.jsonc` in your project root, `.opencode/`, or `~/.config/o
 
 That's it. Everything else has sensible defaults. Project config merges on top of user-wide settings.
 
-### Oh-My-OpenCode Users
+### Oh-My-OpenCode / Oh-My-OpenAgent Users
 
-If you use [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode), disable the hooks that conflict with Magic Context in your `oh-my-opencode.json`:
+If you use [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (formerly oh-my-opencode), disable the hooks that conflict with Magic Context in your `oh-my-openagent.json`:
 
 ```json
 {
@@ -113,7 +113,7 @@ If you use [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode), dis
 }
 ```
 
-The setup wizard handles this automatically if it detects an oh-my-opencode config.
+The setup wizard handles this automatically if it detects an oh-my-openagent or oh-my-opencode config.
 
 ---
 

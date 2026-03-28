@@ -30,6 +30,10 @@ function getConfigDir(): string {
 
 function findOmoConfig(configDir: string): string | null {
     const locations = [
+        // Current name: oh-my-openagent
+        join(configDir, "oh-my-openagent.jsonc"),
+        join(configDir, "oh-my-openagent.json"),
+        // Legacy name: oh-my-opencode
         join(configDir, "oh-my-opencode.jsonc"),
         join(configDir, "oh-my-opencode.json"),
     ];
