@@ -46,25 +46,28 @@ function addPluginToOpenCodeConfig(configPath: string, format: "json" | "jsonc" 
             plugin: [PLUGIN_NAME],
             compaction: { auto: false, prune: false },
         };
-        writeJsonc(configPath, config);
+        writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
         return;
     }
 
-    const config = readJsonc(configPath);
+    // Read existing config, merge our changes, preserve everything else
+    const existing = readJsonc(configPath);
 
-    const plugins = (config.plugin as string[]) ?? [];
+    // Add plugin if not present
+    const plugins = (existing.plugin as string[]) ?? [];
     const hasPlugin = plugins.some((p) => p === PLUGIN_NAME || p.startsWith(`${PLUGIN_NAME}@`));
     if (!hasPlugin) {
         plugins.push(PLUGIN_NAME);
-        config.plugin = plugins;
     }
+    existing.plugin = plugins;
 
-    const compaction = (config.compaction as Record<string, unknown>) ?? {};
+    // Set compaction fields without replacing other compaction settings
+    const compaction = (existing.compaction as Record<string, unknown>) ?? {};
     compaction.auto = false;
     compaction.prune = false;
-    config.compaction = compaction;
+    existing.compaction = compaction;
 
-    writeJsonc(configPath, config);
+    writeFileSync(configPath, `${JSON.stringify(existing, null, 2)}\n`);
 }
 
 function writeMagicContextConfig(
@@ -77,31 +80,38 @@ function writeMagicContextConfig(
         sidekickModel: string | null;
     },
 ): void {
-    const config: Record<string, unknown> = {};
+    // Read existing config to preserve user's other settings
+    const config: Record<string, unknown> = existsSync(configPath) ? readJsonc(configPath) : {};
 
     if (options.historianModel) {
-        config.historian = { model: options.historianModel };
+        const historian = (config.historian as Record<string, unknown>) ?? {};
+        historian.model = options.historianModel;
+        config.historian = historian;
     }
 
     if (options.dreamerEnabled) {
-        const dreamer: Record<string, unknown> = { enabled: true };
+        const dreamer = (config.dreamer as Record<string, unknown>) ?? {};
+        dreamer.enabled = true;
         if (options.dreamerModel) {
             dreamer.model = options.dreamerModel;
         }
         config.dreamer = dreamer;
     } else {
-        config.dreamer = { enabled: false };
+        const dreamer = (config.dreamer as Record<string, unknown>) ?? {};
+        dreamer.enabled = false;
+        config.dreamer = dreamer;
     }
 
     if (options.sidekickEnabled) {
-        const sidekick: Record<string, unknown> = { enabled: true };
+        const sidekick = (config.sidekick as Record<string, unknown>) ?? {};
+        sidekick.enabled = true;
         if (options.sidekickModel) {
             sidekick.model = options.sidekickModel;
         }
         config.sidekick = sidekick;
     }
 
-    writeJsonc(configPath, config);
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 function disableOmoHooks(omoConfigPath: string): void {
@@ -121,7 +131,7 @@ function disableOmoHooks(omoConfigPath: string): void {
     }
 
     config.disabled_hooks = disabledHooks;
-    writeJsonc(omoConfigPath, config);
+    writeFileSync(omoConfigPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 // ─── Main Setup Flow ──────────────────────────────────────
