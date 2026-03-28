@@ -5,6 +5,9 @@
   "description": "OpenCode plugin for Magic Context — cross-session memory and context management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "opencode-magic-context": "dist/cli.js"
+  },
   "author": "ualtinok",
   "license": "MIT",
   "keywords": [
@@ -23,10 +26,11 @@
   },
   "files": [
     "dist",
+    "scripts/install.sh",
     "README.md"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun --format esm --external @huggingface/transformers --external @opencode-ai/plugin && tsc --emitDeclarationOnly",
+    "build": "bun build src/index.ts --outdir dist --target bun --format esm --external @huggingface/transformers --external @opencode-ai/plugin && bun build src/cli/index.ts --outfile dist/cli.js --target node --format esm && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json",
     "test": "bun test",
     "lint": "biome check .",

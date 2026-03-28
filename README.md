@@ -27,24 +27,40 @@
 
 ## Get Started
 
+### Quick Setup (Recommended)
+
+Run the interactive setup wizard — it detects your models, configures everything, and handles compatibility:
+
+```bash
+# One-liner install
+curl -fsSL https://raw.githubusercontent.com/cortexkit/opencode-magic-context/master/scripts/install.sh | bash
+
+# Or run directly with bunx/npx
+bunx @cortexkit/opencode-magic-context setup
+npx @cortexkit/opencode-magic-context setup
+```
+
+The wizard will:
+1. Check your OpenCode installation and available models
+2. Add the plugin and disable built-in compaction
+3. Help you pick models for historian, dreamer, and sidekick
+4. Handle oh-my-opencode compatibility if needed
+
+### Manual Setup
+
 Add to your OpenCode config (`opencode.json` or `opencode.jsonc`):
 
 ```jsonc
 {
-  "plugins": ["@cortexkit/opencode-magic-context@latest"]
-}
-```
-
-Magic Context conflicts with OpenCode's built-in compaction — the two cannot run together. To disable it:
-
-```jsonc
-{
+  "plugin": ["@cortexkit/opencode-magic-context"],
   "compaction": {
     "auto": false,
     "prune": false
   }
 }
 ```
+
+> **Why disable compaction?** Magic Context manages context itself — built-in compaction interferes with its cache-aware deferred operations and would cause duplicate compression.
 
 Create `magic-context.jsonc` in your project root, `.opencode/`, or `~/.config/opencode/`:
 
@@ -62,6 +78,22 @@ Create `magic-context.jsonc` in your project root, `.opencode/`, or `~/.config/o
 ```
 
 That's it. Everything else has sensible defaults. Project config merges on top of user-wide settings.
+
+### Oh-My-OpenCode Users
+
+If you use [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode), disable the hooks that conflict with Magic Context in your `oh-my-opencode.json`:
+
+```json
+{
+  "disabled_hooks": [
+    "context-window-monitor",
+    "preemptive-compaction",
+    "anthropic-context-window-limit-recovery"
+  ]
+}
+```
+
+The setup wizard handles this automatically if it detects an oh-my-opencode config.
 
 ---
 
