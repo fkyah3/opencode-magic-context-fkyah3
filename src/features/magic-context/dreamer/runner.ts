@@ -270,8 +270,9 @@ export async function processDreamQueue(args: {
     taskTimeoutMinutes: number;
     maxRuntimeMinutes: number;
 }): Promise<DreamRunResult | null> {
-    clearStaleEntries(args.db, 2 * 60 * 60 * 1000);
-
+    // Use configured max runtime + 30min buffer for stale threshold instead of hardcoded 2h
+    const maxRuntimeMs = args.maxRuntimeMinutes * 60 * 1000;
+    clearStaleEntries(args.db, maxRuntimeMs + 30 * 60 * 1000);
     const entry = dequeueNext(args.db);
     if (!entry) {
         return null;

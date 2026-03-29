@@ -39,7 +39,7 @@ function loadConfigFile(configPath: string): Record<string, unknown> | null {
     } catch (error) {
         console.warn(
             `[magic-context] failed to load config from ${configPath}:`,
-            error instanceof Error ? error.message : error,
+            error instanceof Error ? error.message : String(error),
         );
         return null;
     }
@@ -120,7 +120,7 @@ export function loadPluginConfig(directory: string): MagicContextPluginConfig {
     const projectConfig =
         projectDetected.format === "none" ? null : loadConfigFile(projectDetected.path);
 
-    let config: MagicContextPluginConfig = {} as MagicContextPluginConfig;
+    let config: MagicContextPluginConfig = parsePluginConfig({});
 
     if (userConfig) {
         config = mergeConfigs(config, parsePluginConfig(userConfig));

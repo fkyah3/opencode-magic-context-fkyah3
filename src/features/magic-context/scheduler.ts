@@ -28,6 +28,8 @@ interface SchedulerConfig {
 export function parseCacheTtl(ttl: string): number {
     const normalizedTtl = ttl.trim();
 
+    // Intentional: bare numeric strings are treated as milliseconds. The setup CLI writes
+    // "5m" or "59m" so users don't encounter bare numbers through normal config paths.
     if (NUMERIC_PATTERN.test(normalizedTtl)) {
         return Number(normalizedTtl);
     }

@@ -53,6 +53,13 @@
 - Depends on: Node built-ins and Zod.
 - Used by: All other layers.
 
+**CLI:**
+- Purpose: Provide a standalone interactive setup wizard runnable via `bunx` or `npx` outside of OpenCode.
+- Location: `src/cli/`
+- Contains: Setup orchestration (`src/cli/setup.ts`), config-path detection (`src/cli/config-paths.ts`), OpenCode integration helpers (`src/cli/opencode-helpers.ts`), prompt wrappers (`src/cli/prompts.ts`).
+- Depends on: `@clack/prompts`, Node built-ins; no dependency on plugin runtime layers.
+- Used by: `dist/cli.js` built separately as a Node ESM target.
+
 ## Data Flow
 
 **Plugin startup:**
@@ -113,6 +120,11 @@
 - Pattern: Constants plus prompt builders.
 
 ## Entry Points
+
+**CLI entry:**
+- Location: `src/cli/index.ts`
+- Triggers: Executed as the `opencode-magic-context` bin target via `bunx` or `npx`.
+- Responsibilities: Dispatch the `setup` wizard sub-command; print usage on unknown commands.
 
 **Plugin entry:**
 - Location: `src/index.ts`

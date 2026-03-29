@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { COLUMN_MAP, isMemoryRow } from "./storage-memory";
+import { COLUMN_MAP, isMemoryRow, toMemory } from "./storage-memory";
 import type { Memory } from "./types";
 
 type PreparedStatement = ReturnType<Database["prepare"]>;
@@ -56,5 +56,5 @@ export function searchMemoriesFTS(
         .all(projectPath, Date.now(), sanitized, limit)
         .filter(isMemoryRow);
 
-    return rows.map((row) => ({ ...row }));
+    return rows.map(toMemory);
 }

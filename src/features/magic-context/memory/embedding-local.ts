@@ -22,10 +22,20 @@ type CreateEmbeddingPipeline = (
 ) => Promise<EmbeddingPipeline>;
 
 function isArrayLikeNumber(value: unknown): value is ArrayLike<number> {
-    return typeof value === "object" && value !== null && "length" in value;
+    if (typeof value !== "object" || value === null || !("length" in value)) {
+        return false;
+    }
+    const arr = value as { length: unknown; [key: number]: unknown };
+    if (typeof arr.length !== "number") {
+        return false;
+    }
+    // Verify a sample element is numeric (or array is empty)
+    return arr.length === 0 || typeof arr[0] === "number";
 }
 
 function toFloat32Array(values: ArrayLike<number>): Float32Array {
+    // Intentional: defensive copy for Float32Array inputs prevents mutation of pipeline output.
+    // The one-time copy cost is negligible compared to inference cost.
     return values instanceof Float32Array
         ? new Float32Array(values)
         : Float32Array.from(Array.from(values));

@@ -21,6 +21,11 @@
 - Contains: TypeScript source files and co-located `*.test.ts` files.
 - Key files: `src/index.ts`, `src/plugin/tool-registry.ts`, `src/hooks/magic-context/hook.ts`
 
+**`src/cli/`:**
+- Purpose: Provide the interactive setup wizard exposed as the `opencode-magic-context` CLI binary.
+- Contains: Setup orchestration, config-path detection, OpenCode integration helpers, and prompt utilities.
+- Key files: `src/cli/index.ts`, `src/cli/setup.ts`, `src/cli/config-paths.ts`, `src/cli/opencode-helpers.ts`
+
 **`src/agents/`:**
 - Purpose: Define hidden agent identifiers and shared agent prompt helpers.
 - Contains: Agent-name constants and prompt-building helpers.
@@ -68,7 +73,7 @@
 
 ## Key File Locations
 
-**Entry Points:** `src/index.ts`: Register the plugin, hidden agents, hooks, tools, and commands.
+**Entry Points:** `src/index.ts`: Register the plugin, hidden agents, hooks, tools, and commands. `src/cli/index.ts`: CLI binary entry for `bunx @cortexkit/opencode-magic-context setup`.
 
 **Configuration:** `src/config/index.ts`: Load and merge config files; `src/config/schema/magic-context.ts`: define defaults and schema rules.
 
@@ -83,6 +88,8 @@
 **Directories:** Group by feature first, then by tool or subsystem name: `src/features/magic-context/dreamer/`, `src/tools/ctx-memory/`, `src/hooks/magic-context/`.
 
 ## Where to Add New Code
+
+**New CLI command:** add it in `src/cli/setup.ts` or a new module under `src/cli/`, then wire it from `src/cli/index.ts`.
 
 **New OpenCode hook adapter:** add the adapter in `src/plugin/` and keep the runtime logic in `src/hooks/magic-context/`.
 

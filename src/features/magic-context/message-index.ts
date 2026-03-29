@@ -80,8 +80,10 @@ function getLastIndexedOrdinal(db: Database, sessionId: string): number {
 }
 
 export function clearIndexedMessages(db: Database, sessionId: string): void {
-    getDeleteFtsStatement(db).run(sessionId);
-    getDeleteIndexStatement(db).run(sessionId);
+    db.transaction(() => {
+        getDeleteFtsStatement(db).run(sessionId);
+        getDeleteIndexStatement(db).run(sessionId);
+    })();
 }
 
 function getIndexableContent(role: string, parts: unknown[]): string {

@@ -81,7 +81,8 @@ describe("storage-meta", () => {
             clearSession(toDatabase(db), "session-1");
 
             //#then
-            expect(db.transaction).toHaveBeenCalledTimes(1);
+            // 2 transactions: outer clearSession + nested clearIndexedMessages
+            expect(db.transaction).toHaveBeenCalledTimes(2);
             expect(db.prepare).toHaveBeenCalledTimes(11);
         });
     });

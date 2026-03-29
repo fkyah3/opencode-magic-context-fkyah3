@@ -144,7 +144,7 @@ export function isMemoryRow(row: unknown): row is Memory {
     );
 }
 
-function toMemory(row: Memory): Memory {
+export function toMemory(row: Memory): Memory {
     return {
         id: row.id,
         projectPath: row.projectPath,
@@ -470,6 +470,9 @@ export function updateMemoryContent(
     content: string,
     normalizedHash: string,
 ): void {
+    // Intentional: read outside transaction — Bun is single-threaded so no concurrent
+    // modification can happen. The projectPath is only used for cache invalidation after
+    // the write, which self-heals on next search if stale.
     const memory = getMemoryById(db, id);
 
     db.transaction(() => {
@@ -541,7 +544,7 @@ export function deleteMemory(db: Database, id: number): void {
     })();
 
     if (memory) {
-        invalidateProject(memory.projectPath);
+        invalidateMemory(memory.projectPath, id);
     }
 }
 

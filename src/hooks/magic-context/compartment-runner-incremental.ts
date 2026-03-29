@@ -137,6 +137,8 @@ export async function runCompartmentAgent(deps: CompartmentRunnerDeps): Promise<
         }
 
         // Append new compartments (existing stay untouched in DB) and replace facts atomically
+        // Intentional: nested transaction — appendCompartments/replaceSessionFacts have their own
+        // transactions for standalone safety. SQLite SAVEPOINTs handle nesting correctly in Bun.
         db.transaction(() => {
             appendCompartments(db, sessionId, newCompartments);
             replaceSessionFacts(db, sessionId, validatedPass.facts ?? []);

@@ -32,12 +32,12 @@ export function promoteSessionFactsToMemory(
     projectPath: string,
     facts: SessionFact[],
 ): void {
-    try {
-        for (const fact of facts) {
-            if (!isPromotableCategory(fact.category)) {
-                continue;
-            }
+    for (const fact of facts) {
+        if (!isPromotableCategory(fact.category)) {
+            continue;
+        }
 
+        try {
             const normalizedHash = computeNormalizedHash(fact.content);
             const existingMemory = getMemoryByHash(db, projectPath, fact.category, normalizedHash);
 
@@ -56,10 +56,16 @@ export function promoteSessionFactsToMemory(
             };
 
             const memory = insertMemory(db, memoryInput);
+            // Intentional: fire-and-forget embedding — promotion runs infrequently (after historian passes)
+            // and the number of new facts per pass is small. Batching adds complexity for negligible benefit.
             void embedAndStoreMemory(db, sessionId, memory.id, memory.content);
+        } catch (error) {
+            sessionLog(
+                sessionId,
+                `memory promotion failed for fact "${fact.content.slice(0, 60)}":`,
+                error,
+            );
         }
-    } catch (error) {
-        sessionLog(sessionId, "memory promotion failed:", error);
     }
 }
 

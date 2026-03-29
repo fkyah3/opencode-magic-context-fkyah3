@@ -23,7 +23,6 @@ const MIN_RECOMP_CHUNK_TOKEN_BUDGET = 20;
  */
 function healCompartmentGaps(
     compartments: Array<{ startMessage: number; endMessage: number }>,
-    _unprocessedFrom: number | null,
 ): void {
     const MAX_HEALABLE_GAP = 15;
 
@@ -62,7 +61,7 @@ export function validateHistorianOutput(
     // Heal gaps between compartments by expanding the previous compartment's endMessage.
     // The historian sometimes skips noise-only message ranges (tool calls, dropped placeholders)
     // which produces valid summaries but invalid contiguous ranges.
-    healCompartmentGaps(parsed.compartments, parsed.unprocessedFrom);
+    healCompartmentGaps(parsed.compartments);
 
     const mapped = mapParsedCompartmentsToChunk(parsed.compartments, chunk, sequenceOffset);
     if (!mapped.ok) {

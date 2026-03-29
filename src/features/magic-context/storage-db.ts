@@ -269,7 +269,7 @@ function createFallbackDatabase(): Database {
         return fallback;
     } catch (error) {
         throw new Error(
-            `[magic-context] storage fatal: failed to initialize fallback database: ${String(error)}`,
+            `[magic-context] storage fatal: failed to initialize fallback database: ${getErrorMessage(error)}`,
         );
     }
 }
