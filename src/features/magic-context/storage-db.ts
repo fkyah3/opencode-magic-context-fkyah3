@@ -239,6 +239,7 @@ CREATE INDEX IF NOT EXISTS idx_dream_queue_pending ON dream_queue(started_at, en
     ensureColumn(db, "session_meta", "times_execute_threshold_reached", "INTEGER DEFAULT 0");
     ensureColumn(db, "session_meta", "compartment_in_progress", "INTEGER DEFAULT 0");
     ensureColumn(db, "session_meta", "system_prompt_hash", "TEXT DEFAULT ''");
+    ensureColumn(db, "session_meta", "cleared_reasoning_through_tag", "INTEGER DEFAULT 0");
     ensureColumn(db, "compartments", "start_message_id", "TEXT DEFAULT ''");
     ensureColumn(db, "compartments", "end_message_id", "TEXT DEFAULT ''");
     ensureColumn(db, "memory_embeddings", "model_id", "TEXT");

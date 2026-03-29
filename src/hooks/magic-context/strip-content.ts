@@ -172,6 +172,71 @@ export function stripDroppedPlaceholderMessages(messages: MessageLike[]): number
     return stripped;
 }
 
+/**
+ * Replay persisted reasoning clearing on every pass (including defer).
+ * Clears reasoning for all messages with tag <= persistedWatermark.
+ * This ensures clearing is sticky across passes even when OpenCode
+ * rebuilds messages fresh from its own DB.
+ */
+export function replayClearedReasoning(
+    messages: MessageLike[],
+    reasoningByMessage: Map<MessageLike, ThinkingLikePart[]>,
+    messageTagNumbers: Map<MessageLike, number>,
+    persistedWatermark: number,
+): number {
+    if (persistedWatermark <= 0) return 0;
+
+    let cleared = 0;
+    for (const message of messages) {
+        const msgTag = messageTagNumbers.get(message) ?? 0;
+        if (msgTag === 0 || msgTag > persistedWatermark) continue;
+
+        const parts = reasoningByMessage.get(message);
+        if (!parts) continue;
+
+        for (const tp of parts) {
+            if (tp.thinking !== undefined && tp.thinking !== "[cleared]") {
+                tp.thinking = "[cleared]";
+                cleared++;
+            }
+            if (tp.text !== undefined && tp.text !== "[cleared]") {
+                tp.text = "[cleared]";
+                cleared++;
+            }
+        }
+    }
+    return cleared;
+}
+
+/**
+ * Replay persisted inline thinking stripping on every pass (including defer).
+ * Strips inline <thinking> tags for all messages with tag <= persistedWatermark.
+ */
+export function replayStrippedInlineThinking(
+    messages: MessageLike[],
+    messageTagNumbers: Map<MessageLike, number>,
+    persistedWatermark: number,
+): number {
+    if (persistedWatermark <= 0) return 0;
+
+    let stripped = 0;
+    for (const message of messages) {
+        if (message.info.role !== "assistant") continue;
+        const msgTag = messageTagNumbers.get(message) ?? 0;
+        if (msgTag === 0 || msgTag > persistedWatermark) continue;
+
+        for (const part of message.parts) {
+            if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") continue;
+            const cleaned = (part.text as string).replace(INLINE_THINKING_PATTERN, "");
+            if (cleaned !== part.text) {
+                part.text = cleaned;
+                stripped++;
+            }
+        }
+    }
+    return stripped;
+}
+
 export function clearOldReasoning(
     messages: MessageLike[],
     reasoningByMessage: Map<MessageLike, ThinkingLikePart[]>,

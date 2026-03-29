@@ -29,6 +29,7 @@ export interface SessionMeta {
     timesExecuteThresholdReached: number;
     compartmentInProgress: boolean;
     systemPromptHash: string;
+    clearedReasoningThroughTag: number;
 }
 
 export type SchedulerDecision = "execute" | "defer";

@@ -36,6 +36,7 @@ export function createSessionHooks(args: {
             compactionHandler,
             config: {
                 protected_tags: pluginConfig.protected_tags ?? DEFAULT_PROTECTED_TAGS,
+                ctx_reduce_enabled: pluginConfig.ctx_reduce_enabled,
                 nudge_interval_tokens:
                     pluginConfig.nudge_interval_tokens ?? DEFAULT_NUDGE_INTERVAL_TOKENS,
                 cache_ttl: pluginConfig.cache_ttl,

@@ -20,7 +20,11 @@ import {
 import { onNoteTrigger } from "./note-nudger";
 import type { NudgePlacementStore } from "./nudge-placement-store";
 import type { ContextNudge } from "./nudger";
-import { stripClearedReasoning } from "./strip-content";
+import {
+    replayClearedReasoning,
+    replayStrippedInlineThinking,
+    stripClearedReasoning,
+} from "./strip-content";
 import { runCompartmentPhase } from "./transform-compartment-phase";
 import { loadContextUsage, resolveSchedulerDecision } from "./transform-context-state";
 import { findLastUserMessageId, findSessionId } from "./transform-message-helpers";
@@ -198,6 +202,32 @@ export function createTransform(deps: TransformDeps) {
             t3,
             `strippedParts=${strippedStructuralNoise}`,
         );
+
+        // Replay persisted reasoning clearing on EVERY pass (including defer).
+        // This ensures reasoning cleared on a previous cache-busting pass stays cleared
+        // even when OpenCode rebuilds messages fresh from its own DB.
+        const persistedReasoningWatermark = sessionMeta?.clearedReasoningThroughTag ?? 0;
+        if (persistedReasoningWatermark > 0) {
+            const tReplay = performance.now();
+            const replayed = replayClearedReasoning(
+                messages,
+                reasoningByMessage,
+                messageTagNumbers,
+                persistedReasoningWatermark,
+            );
+            const replayedInline = replayStrippedInlineThinking(
+                messages,
+                messageTagNumbers,
+                persistedReasoningWatermark,
+            );
+            if (replayed > 0 || replayedInline > 0) {
+                sessionLog(
+                    sessionId,
+                    `reasoning replay: cleared=${replayed} inlineStripped=${replayedInline} (watermark=${persistedReasoningWatermark})`,
+                );
+            }
+            logTransformTiming(sessionId, "replayReasoningClearing", tReplay);
+        }
 
         const t4 = performance.now();
         const strippedClearedReasoning = stripClearedReasoning(messages);

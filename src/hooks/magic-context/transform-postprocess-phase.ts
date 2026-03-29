@@ -205,10 +205,28 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
                 args.clearReasoningAge,
             );
             if (clearedReasoning > 0 || strippedInline > 0) {
-                sessionLog(
-                    args.sessionId,
-                    `reasoning cleanup: cleared=${clearedReasoning} inlineStripped=${strippedInline}`,
-                );
+                // Compute and persist the reasoning watermark so future defer passes
+                // can replay the same clearing without re-computing the cutoff.
+                let maxTag = 0;
+                for (const tag of args.messageTagNumbers.values()) {
+                    if (tag > maxTag) maxTag = tag;
+                }
+                const newWatermark = maxTag - args.clearReasoningAge;
+                const currentWatermark = args.sessionMeta?.clearedReasoningThroughTag ?? 0;
+                if (newWatermark > currentWatermark) {
+                    updateSessionMeta(args.db, args.sessionId, {
+                        clearedReasoningThroughTag: newWatermark,
+                    });
+                    sessionLog(
+                        args.sessionId,
+                        `reasoning cleanup: cleared=${clearedReasoning} inlineStripped=${strippedInline} watermark=${currentWatermark}→${newWatermark}`,
+                    );
+                } else {
+                    sessionLog(
+                        args.sessionId,
+                        `reasoning cleanup: cleared=${clearedReasoning} inlineStripped=${strippedInline} watermark=${currentWatermark} (unchanged)`,
+                    );
+                }
             }
             logTransformTiming(args.sessionId, "clearOldReasoning", t7);
             args.flushedSessions.delete(args.sessionId);
