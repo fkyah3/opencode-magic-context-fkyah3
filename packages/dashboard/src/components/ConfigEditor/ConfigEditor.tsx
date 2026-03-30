@@ -298,38 +298,13 @@ function ConfigForm(props: {
           <For each={sections().filter(([name]) => name !== "Tags & Cleanup")}>
             {([sectionName, fields]) => {
               const isFullWidth = sectionName === "Historian" || sectionName === "Memory";
-              return (
+              return (<>
                 <div class={`config-card ${isFullWidth ? "full-width" : ""}`}>
                   <div class="config-card-header">
                     <span class="config-card-icon">{SECTION_ICONS[sectionName] || "📋"}</span>
                     <span class="config-card-title">{sectionName}</span>
                   </div>
-                  {sectionName === "Thresholds" ? (
-                    <div class="config-card-content">
-                      <PerModelField
-                        label="Cache TTL"
-                        configKey="cache_ttl"
-                        description="How long to wait before executing queued operations."
-                        value={getNestedValue(formData(), "cache_ttl") ?? getNestedValue(parsed(), "cache_ttl")}
-                        onChange={(v) => handleFieldChange("cache_ttl", v)}
-                        models={models() ?? []}
-                        inputType="text"
-                        defaultPlaceholder="5m"
-                      />
-                      <PerModelField
-                        label="Execute Threshold %"
-                        configKey="execute_threshold_percentage"
-                        description="Context usage percentage (35–80) at which queued drops execute. Max 80."
-                        value={getNestedValue(formData(), "execute_threshold_percentage") ?? getNestedValue(parsed(), "execute_threshold_percentage")}
-                        onChange={(v) => handleFieldChange("execute_threshold_percentage", v)}
-                        models={models() ?? []}
-                        inputType="slider"
-                        sliderConfig={{ min: 35, max: 80, step: 1, suffix: "%", defaultValue: 65 }}
-                        defaultPlaceholder="65"
-                      />
-                      <For each={fields}>{renderField}</For>
-                    </div>
-                  ) : sectionName === "Memory" ? (() => {
+                  {sectionName === "Memory" ? (() => {
                     const embeddingProvider = () => {
                       const v = getNestedValue(formData(), "embedding.provider");
                       return (v as string) || "local";
@@ -520,7 +495,39 @@ function ConfigForm(props: {
                   </div>
                   )}
                 </div>
-              );
+                {/* Thresholds card — right of General */}
+                {sectionName === "General" && (
+                  <div class="config-card">
+                    <div class="config-card-header">
+                      <span class="config-card-icon">⚡</span>
+                      <span class="config-card-title">Thresholds</span>
+                    </div>
+                    <div class="config-card-content">
+                      <PerModelField
+                        label="Cache TTL"
+                        configKey="cache_ttl"
+                        description="How long to wait before executing queued operations."
+                        value={getNestedValue(formData(), "cache_ttl") ?? getNestedValue(parsed(), "cache_ttl")}
+                        onChange={(v) => handleFieldChange("cache_ttl", v)}
+                        models={models() ?? []}
+                        inputType="text"
+                        defaultPlaceholder="5m"
+                      />
+                      <PerModelField
+                        label="Execute Threshold %"
+                        configKey="execute_threshold_percentage"
+                        description="Context usage percentage (35–80) at which queued drops execute. Max 80."
+                        value={getNestedValue(formData(), "execute_threshold_percentage") ?? getNestedValue(parsed(), "execute_threshold_percentage")}
+                        onChange={(v) => handleFieldChange("execute_threshold_percentage", v)}
+                        models={models() ?? []}
+                        inputType="slider"
+                        sliderConfig={{ min: 35, max: 80, step: 1, suffix: "%", defaultValue: 65 }}
+                        defaultPlaceholder="65"
+                      />
+                    </div>
+                  </div>
+                )}
+              </>);
             }}
           </For>
 
