@@ -331,15 +331,38 @@ pub fn get_memories(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<Memory>, rusqlite::Error> {
-    let has_search = search_query.is_some() && !search_query.unwrap_or("").is_empty();
+    let raw_search = search_query.unwrap_or("").trim().to_string();
+    let has_search = !raw_search.is_empty();
+
+    // Sanitize search query for FTS5: wrap each token in double quotes so
+    // special characters (/, -, etc.) are treated as literals, matching the
+    // plugin's sanitizeFtsQuery() approach.
+    let sanitized_fts = if has_search {
+        let tokens: Vec<String> = raw_search
+            .split_whitespace()
+            .filter(|t| !t.is_empty())
+            .map(|t| format!("\"{}\"", t.replace('"', "\"\"")))
+            .collect();
+        if tokens.is_empty() { String::new() } else { tokens.join(" ") }
+    } else {
+        String::new()
+    };
+    let use_fts = !sanitized_fts.is_empty();
+    // For very short queries (< 3 chars) or if FTS sanitization produces nothing,
+    // fall back to LIKE which handles partial matches better
+    let use_like_fallback = has_search && (!use_fts || raw_search.len() < 3);
+    let like_pattern = format!("%{}%", raw_search.replace('%', "\\%").replace('_', "\\_"));
 
     // Build WHERE clauses and params dynamically
     let mut conditions = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
-    if has_search {
-        params.push(Box::new(search_query.unwrap().to_string()));
+    if use_fts && !use_like_fallback {
+        params.push(Box::new(sanitized_fts.clone()));
         // FTS match uses the first param
+    } else if has_search {
+        params.push(Box::new(like_pattern.clone()));
+        // LIKE uses the first param
     }
 
     if let Some(p) = project_filter {
@@ -367,7 +390,8 @@ pub fn get_memories(
     params.push(Box::new(limit));
     params.push(Box::new(offset));
 
-    let sql = if has_search {
+    let sql = if use_fts && !use_like_fallback {
+        // FTS5 search with sanitized query
         format!(
             "SELECT m.id, m.project_path, m.category, m.content, m.normalized_hash,
                     m.source_session_id, m.source_type, m.seen_count, m.retrieval_count,
@@ -381,6 +405,23 @@ pub fn get_memories(
              WHERE memories_fts MATCH ?1
              {}
              ORDER BY rank
+             LIMIT ?{} OFFSET ?{}",
+            where_extra, limit_idx, offset_idx,
+        )
+    } else if has_search {
+        // LIKE fallback for short queries or special-character-heavy input
+        format!(
+            "SELECT m.id, m.project_path, m.category, m.content, m.normalized_hash,
+                    m.source_session_id, m.source_type, m.seen_count, m.retrieval_count,
+                    m.first_seen_at, m.created_at, m.updated_at, m.last_seen_at,
+                    m.last_retrieved_at, m.status, m.expires_at, m.verification_status,
+                    m.verified_at, m.superseded_by_memory_id, m.merged_from, m.metadata_json,
+                    (CASE WHEN me.memory_id IS NOT NULL THEN 1 ELSE 0 END) as has_embedding
+             FROM memories m
+             LEFT JOIN memory_embeddings me ON me.memory_id = m.id
+             WHERE (m.content LIKE ?1 ESCAPE '\\' OR m.category LIKE ?1 ESCAPE '\\')
+             {}
+             ORDER BY m.updated_at DESC
              LIMIT ?{} OFFSET ?{}",
             where_extra, limit_idx, offset_idx,
         )
@@ -402,10 +443,81 @@ pub fn get_memories(
         )
     };
 
-    let mut stmt = conn.prepare(&sql)?;
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    let rows = stmt.query_map(param_refs.as_slice(), map_memory_row)?;
-    rows.collect()
+    // Try FTS first; if it fails (e.g. malformed query despite sanitization), fall back to LIKE
+    let result = {
+        let mut stmt = conn.prepare(&sql)?;
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(param_refs.as_slice(), map_memory_row)?;
+        rows.collect::<Result<Vec<_>, _>>()
+    };
+
+    match result {
+        Ok(memories) if !memories.is_empty() || !use_fts => Ok(memories),
+        Ok(_empty) if use_fts && !use_like_fallback => {
+            // FTS returned nothing — retry with LIKE for better partial matching
+            let like_sql = format!(
+                "SELECT m.id, m.project_path, m.category, m.content, m.normalized_hash,
+                        m.source_session_id, m.source_type, m.seen_count, m.retrieval_count,
+                        m.first_seen_at, m.created_at, m.updated_at, m.last_seen_at,
+                        m.last_retrieved_at, m.status, m.expires_at, m.verification_status,
+                        m.verified_at, m.superseded_by_memory_id, m.merged_from, m.metadata_json,
+                        (CASE WHEN me.memory_id IS NOT NULL THEN 1 ELSE 0 END) as has_embedding
+                 FROM memories m
+                 LEFT JOIN memory_embeddings me ON me.memory_id = m.id
+                 WHERE (m.content LIKE ?1 ESCAPE '\\' OR m.category LIKE ?1 ESCAPE '\\')
+                 {}
+                 ORDER BY m.updated_at DESC
+                 LIMIT ?{} OFFSET ?{}",
+                where_extra, limit_idx, offset_idx,
+            );
+            // Rebuild params with LIKE pattern instead of FTS query
+            let mut like_params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+            like_params.push(Box::new(like_pattern));
+            // Re-add filter params
+            if let Some(p) = project_filter { like_params.push(Box::new(p.to_string())); }
+            if let Some(s) = status_filter { like_params.push(Box::new(s.to_string())); }
+            if let Some(c) = category_filter { like_params.push(Box::new(c.to_string())); }
+            like_params.push(Box::new(limit));
+            like_params.push(Box::new(offset));
+
+            let mut stmt = conn.prepare(&like_sql)?;
+            let param_refs: Vec<&dyn rusqlite::types::ToSql> = like_params.iter().map(|p| p.as_ref()).collect();
+            let rows = stmt.query_map(param_refs.as_slice(), map_memory_row)?;
+            rows.collect()
+        }
+        Err(e) if use_fts => {
+            // FTS query failed — fall back to LIKE
+            eprintln!("FTS search failed, falling back to LIKE: {}", e);
+            let like_sql = format!(
+                "SELECT m.id, m.project_path, m.category, m.content, m.normalized_hash,
+                        m.source_session_id, m.source_type, m.seen_count, m.retrieval_count,
+                        m.first_seen_at, m.created_at, m.updated_at, m.last_seen_at,
+                        m.last_retrieved_at, m.status, m.expires_at, m.verification_status,
+                        m.verified_at, m.superseded_by_memory_id, m.merged_from, m.metadata_json,
+                        (CASE WHEN me.memory_id IS NOT NULL THEN 1 ELSE 0 END) as has_embedding
+                 FROM memories m
+                 LEFT JOIN memory_embeddings me ON me.memory_id = m.id
+                 WHERE (m.content LIKE ?1 ESCAPE '\\' OR m.category LIKE ?1 ESCAPE '\\')
+                 {}
+                 ORDER BY m.updated_at DESC
+                 LIMIT ?{} OFFSET ?{}",
+                where_extra, limit_idx, offset_idx,
+            );
+            let mut like_params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+            like_params.push(Box::new(like_pattern));
+            if let Some(p) = project_filter { like_params.push(Box::new(p.to_string())); }
+            if let Some(s) = status_filter { like_params.push(Box::new(s.to_string())); }
+            if let Some(c) = category_filter { like_params.push(Box::new(c.to_string())); }
+            like_params.push(Box::new(limit));
+            like_params.push(Box::new(offset));
+
+            let mut stmt = conn.prepare(&like_sql)?;
+            let param_refs: Vec<&dyn rusqlite::types::ToSql> = like_params.iter().map(|p| p.as_ref()).collect();
+            let rows = stmt.query_map(param_refs.as_slice(), map_memory_row)?;
+            rows.collect()
+        }
+        other => other,
+    }
 }
 
 fn map_memory_row(row: &rusqlite::Row<'_>) -> Result<Memory, rusqlite::Error> {
