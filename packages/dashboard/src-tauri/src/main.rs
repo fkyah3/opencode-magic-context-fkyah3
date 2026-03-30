@@ -58,7 +58,10 @@ fn main() {
 commands::get_config,
 commands::save_config,
 commands::get_project_configs,
-commands::save_project_config,            // Health
+commands::save_project_config,
+            // Models
+            commands::get_available_models,
+            // Health
             commands::get_db_health,
         ])
         .setup(|app| {

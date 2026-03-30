@@ -1,6 +1,6 @@
 import { createSignal, createResource, Show, For, createMemo } from "solid-js";
 import type { ProjectConfigEntry } from "../../lib/types";
-import { getConfig, saveConfig, getProjectConfigs, saveProjectConfig } from "../../lib/api";
+import { getConfig, saveConfig, getProjectConfigs, saveProjectConfig, getAvailableModels } from "../../lib/api";
 
 // ── JSONC helpers ───────────────────────────────────────────
 
@@ -120,6 +120,7 @@ function ConfigForm(props: {
   const [showRaw, setShowRaw] = createSignal(false);
   const [rawEdit, setRawEdit] = createSignal<string | null>(null);
   const [formData, setFormData] = createSignal<Record<string, unknown>>(parseJsonc(props.content));
+  const [models] = createResource(getAvailableModels);
 
   // Reset form data when content prop changes
   const parsed = createMemo(() => parseJsonc(props.content));
@@ -335,6 +336,463 @@ function ConfigForm(props: {
               );
             }}
           </For>
+
+          {/* ── Agent Configuration Cards ───────────────────────── */}
+
+          {/* Historian Card */}
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-card-icon">📜</span>
+              <span class="config-card-title">HISTORIAN</span>
+            </div>
+            <div class="config-card-content">
+              {/* Model Select */}
+              <div class="config-field">
+                <div class="config-field-header">
+                  <label class="config-field-label">Model</label>
+                </div>
+                <span class="config-field-desc">Primary model for historian agent</span>
+                <select
+                  class="config-input"
+                  value={String(getNestedValue(formData(), "historian.model") ?? "")}
+                  onChange={(e) => handleFieldChange("historian.model", e.currentTarget.value || undefined)}
+                >
+                  <option value="">— Use fallback chain —</option>
+                  <Show when={models()}>
+                    {(modelList) => {
+                      const grouped = modelList().reduce((acc, model) => {
+                        const [provider] = model.split("/");
+                        if (!acc[provider]) acc[provider] = [];
+                        acc[provider].push(model);
+                        return acc;
+                      }, {} as Record<string, string[]>);
+                      return (
+                        <For each={Object.entries(grouped)}>
+                          {([provider, providerModels]) => (
+                            <optgroup label={provider}>
+                              <For each={providerModels}>
+                                {(model) => <option value={model}>{model}</option>}
+                              </For>
+                            </optgroup>
+                          )}
+                        </For>
+                      );
+                    }}
+                  </Show>
+                </select>
+              </div>
+
+              {/* Fallback Models */}
+              <div class="config-field">
+                <div class="config-field-header">
+                  <label class="config-field-label">Fallback Models</label>
+                </div>
+                <span class="config-field-desc">Models to try if primary fails</span>
+                <div class="model-chain-list">
+                  <Show
+                    when={(getNestedValue(formData(), "historian.fallback_models") as string[] ?? []).length > 0}
+                    fallback={<span class="model-chain-empty">Using built-in fallback chain</span>}
+                  >
+                    <For each={getNestedValue(formData(), "historian.fallback_models") as string[] ?? []}>
+                      {(model, index) => (
+                        <div class="model-chain-item">
+                          <span class="mono" style={{ flex: 1 }}>{model}</span>
+                          <button
+                            class="btn sm danger"
+                            onClick={() => {
+                              const current = (getNestedValue(formData(), "historian.fallback_models") as string[] ?? []);
+                              const updated = current.filter((_, i) => i !== index());
+                              handleFieldChange("historian.fallback_models", updated.length > 0 ? updated : undefined);
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                    </For>
+                  </Show>
+                </div>
+                <div class="model-chain-add">
+                  <select
+                    class="config-input"
+                    id="historian-fallback-add"
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">— Select model —</option>
+                    <Show when={models()}>
+                      {(modelList) => {
+                        const grouped = modelList().reduce((acc, model) => {
+                          const [provider] = model.split("/");
+                          if (!acc[provider]) acc[provider] = [];
+                          acc[provider].push(model);
+                          return acc;
+                        }, {} as Record<string, string[]>);
+                        return (
+                          <For each={Object.entries(grouped)}>
+                            {([provider, providerModels]) => (
+                              <optgroup label={provider}>
+                                <For each={providerModels}>
+                                  {(model) => <option value={model}>{model}</option>}
+                                </For>
+                              </optgroup>
+                            )}
+                          </For>
+                        );
+                      }}
+                    </Show>
+                  </select>
+                  <button
+                    class="btn sm"
+                    onClick={() => {
+                      const select = document.getElementById("historian-fallback-add") as HTMLSelectElement;
+                      const model = select.value;
+                      if (model) {
+                        const current = (getNestedValue(formData(), "historian.fallback_models") as string[] ?? []);
+                        if (!current.includes(model)) {
+                          handleFieldChange("historian.fallback_models", [...current, model]);
+                        }
+                        select.value = "";
+                      }
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Dreamer Card */}
+          <div class="config-card full-width">
+            <div class="config-card-header">
+              <span class="config-card-icon">🌙</span>
+              <span class="config-card-title">DREAMER</span>
+            </div>
+            <div class="config-card-content">
+              <div style={{ display: "grid", "grid-template-columns": "repeat(2, 1fr)", gap: "16px" }}>
+                {/* Enabled Toggle */}
+                <div class="config-field">
+                  <div class="config-field-header">
+                    <label class="config-field-label">Enabled</label>
+                  </div>
+                  <span class="config-field-desc">Enable dreamer background processing</span>
+                  <label class="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={getNestedValue(formData(), "dreamer.enabled") as boolean ?? true}
+                      onChange={(e) => handleFieldChange("dreamer.enabled", e.currentTarget.checked)}
+                    />
+                    <span class="toggle-slider" />
+                    <span class="toggle-label">{(getNestedValue(formData(), "dreamer.enabled") as boolean ?? true) ? "Enabled" : "Disabled"}</span>
+                  </label>
+                </div>
+
+                {/* Model Select */}
+                <div class="config-field">
+                  <div class="config-field-header">
+                    <label class="config-field-label">Model</label>
+                  </div>
+                  <span class="config-field-desc">Primary model for dreamer agent</span>
+                  <select
+                    class="config-input"
+                    value={String(getNestedValue(formData(), "dreamer.model") ?? "")}
+                    onChange={(e) => handleFieldChange("dreamer.model", e.currentTarget.value || undefined)}
+                  >
+                    <option value="">— Use fallback chain —</option>
+                    <Show when={models()}>
+                      {(modelList) => {
+                        const grouped = modelList().reduce((acc, model) => {
+                          const [provider] = model.split("/");
+                          if (!acc[provider]) acc[provider] = [];
+                          acc[provider].push(model);
+                          return acc;
+                        }, {} as Record<string, string[]>);
+                        return (
+                          <For each={Object.entries(grouped)}>
+                            {([provider, providerModels]) => (
+                              <optgroup label={provider}>
+                                <For each={providerModels}>
+                                  {(model) => <option value={model}>{model}</option>}
+                                </For>
+                              </optgroup>
+                            )}
+                          </For>
+                        );
+                      }}
+                    </Show>
+                  </select>
+                </div>
+
+                {/* Schedule */}
+                <div class="config-field">
+                  <div class="config-field-header">
+                    <label class="config-field-label">Schedule</label>
+                  </div>
+                  <span class="config-field-desc">Time window for dreamer runs (e.g., 02:00-06:00)</span>
+                  <input
+                    class="config-input"
+                    type="text"
+                    value={String(getNestedValue(formData(), "dreamer.schedule") ?? "")}
+                    placeholder="02:00-06:00"
+                    onInput={(e) => handleFieldChange("dreamer.schedule", e.currentTarget.value || undefined)}
+                  />
+                </div>
+
+                {/* Inject Docs Toggle */}
+                <div class="config-field">
+                  <div class="config-field-header">
+                    <label class="config-field-label">Inject Docs</label>
+                  </div>
+                  <span class="config-field-desc">Inject documentation into dreamer context</span>
+                  <label class="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={getNestedValue(formData(), "dreamer.inject_docs") as boolean ?? true}
+                      onChange={(e) => handleFieldChange("dreamer.inject_docs", e.currentTarget.checked)}
+                    />
+                    <span class="toggle-slider" />
+                    <span class="toggle-label">{(getNestedValue(formData(), "dreamer.inject_docs") as boolean ?? true) ? "Enabled" : "Disabled"}</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Fallback Models */}
+              <div class="config-field">
+                <div class="config-field-header">
+                  <label class="config-field-label">Fallback Models</label>
+                </div>
+                <span class="config-field-desc">Models to try if primary fails</span>
+                <div class="model-chain-list">
+                  <Show
+                    when={(getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []).length > 0}
+                    fallback={<span class="model-chain-empty">Using built-in fallback chain</span>}
+                  >
+                    <For each={getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []}>
+                      {(model, index) => (
+                        <div class="model-chain-item">
+                          <span class="mono" style={{ flex: 1 }}>{model}</span>
+                          <button
+                            class="btn sm danger"
+                            onClick={() => {
+                              const current = (getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []);
+                              const updated = current.filter((_, i) => i !== index());
+                              handleFieldChange("dreamer.fallback_models", updated.length > 0 ? updated : undefined);
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                    </For>
+                  </Show>
+                </div>
+                <div class="model-chain-add">
+                  <select
+                    class="config-input"
+                    id="dreamer-fallback-add"
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">— Select model —</option>
+                    <Show when={models()}>
+                      {(modelList) => {
+                        const grouped = modelList().reduce((acc, model) => {
+                          const [provider] = model.split("/");
+                          if (!acc[provider]) acc[provider] = [];
+                          acc[provider].push(model);
+                          return acc;
+                        }, {} as Record<string, string[]>);
+                        return (
+                          <For each={Object.entries(grouped)}>
+                            {([provider, providerModels]) => (
+                              <optgroup label={provider}>
+                                <For each={providerModels}>
+                                  {(model) => <option value={model}>{model}</option>}
+                                </For>
+                              </optgroup>
+                            )}
+                          </For>
+                        );
+                      }}
+                    </Show>
+                  </select>
+                  <button
+                    class="btn sm"
+                    onClick={() => {
+                      const select = document.getElementById("dreamer-fallback-add") as HTMLSelectElement;
+                      const model = select.value;
+                      if (model) {
+                        const current = (getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []);
+                        if (!current.includes(model)) {
+                          handleFieldChange("dreamer.fallback_models", [...current, model]);
+                        }
+                        select.value = "";
+                      }
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sidekick Card */}
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-card-icon">🤖</span>
+              <span class="config-card-title">SIDEKICK</span>
+            </div>
+            <div class="config-card-content">
+              {/* Enabled Toggle */}
+              <div class="config-field">
+                <div class="config-field-header">
+                  <label class="config-field-label">Enabled</label>
+                </div>
+                <span class="config-field-desc">Enable sidekick augmentation</span>
+                <label class="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={getNestedValue(formData(), "sidekick.enabled") as boolean ?? true}
+                    onChange={(e) => handleFieldChange("sidekick.enabled", e.currentTarget.checked)}
+                  />
+                  <span class="toggle-slider" />
+                  <span class="toggle-label">{(getNestedValue(formData(), "sidekick.enabled") as boolean ?? true) ? "Enabled" : "Disabled"}</span>
+                </label>
+              </div>
+
+              {/* Model Select */}
+              <div class="config-field">
+                <div class="config-field-header">
+                  <label class="config-field-label">Model</label>
+                </div>
+                <span class="config-field-desc">Primary model for sidekick agent</span>
+                <select
+                  class="config-input"
+                  value={String(getNestedValue(formData(), "sidekick.model") ?? "")}
+                  onChange={(e) => handleFieldChange("sidekick.model", e.currentTarget.value || undefined)}
+                >
+                  <option value="">— Use fallback chain —</option>
+                  <Show when={models()}>
+                    {(modelList) => {
+                      const grouped = modelList().reduce((acc, model) => {
+                        const [provider] = model.split("/");
+                        if (!acc[provider]) acc[provider] = [];
+                        acc[provider].push(model);
+                        return acc;
+                      }, {} as Record<string, string[]>);
+                      return (
+                        <For each={Object.entries(grouped)}>
+                          {([provider, providerModels]) => (
+                            <optgroup label={provider}>
+                              <For each={providerModels}>
+                                {(model) => <option value={model}>{model}</option>}
+                              </For>
+                            </optgroup>
+                          )}
+                        </For>
+                      );
+                    }}
+                  </Show>
+                </select>
+              </div>
+
+              {/* Timeout */}
+              <div class="config-field">
+                <div class="config-field-header">
+                  <label class="config-field-label">Timeout (ms)</label>
+                </div>
+                <span class="config-field-desc">Max wait time for sidekick response</span>
+                <input
+                  class="config-input"
+                  type="number"
+                  value={getNestedValue(formData(), "sidekick.timeout_ms") != null ? String(getNestedValue(formData(), "sidekick.timeout_ms")) : ""}
+                  placeholder="30000"
+                  onInput={(e) => {
+                    const v = e.currentTarget.value;
+                    handleFieldChange("sidekick.timeout_ms", v ? Number(v) : undefined);
+                  }}
+                />
+              </div>
+
+              {/* Fallback Models */}
+              <div class="config-field">
+                <div class="config-field-header">
+                  <label class="config-field-label">Fallback Models</label>
+                </div>
+                <span class="config-field-desc">Models to try if primary fails</span>
+                <div class="model-chain-list">
+                  <Show
+                    when={(getNestedValue(formData(), "sidekick.fallback_models") as string[] ?? []).length > 0}
+                    fallback={<span class="model-chain-empty">Using built-in fallback chain</span>}
+                  >
+                    <For each={getNestedValue(formData(), "sidekick.fallback_models") as string[] ?? []}>
+                      {(model, index) => (
+                        <div class="model-chain-item">
+                          <span class="mono" style={{ flex: 1 }}>{model}</span>
+                          <button
+                            class="btn sm danger"
+                            onClick={() => {
+                              const current = (getNestedValue(formData(), "sidekick.fallback_models") as string[] ?? []);
+                              const updated = current.filter((_, i) => i !== index());
+                              handleFieldChange("sidekick.fallback_models", updated.length > 0 ? updated : undefined);
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                    </For>
+                  </Show>
+                </div>
+                <div class="model-chain-add">
+                  <select
+                    class="config-input"
+                    id="sidekick-fallback-add"
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">— Select model —</option>
+                    <Show when={models()}>
+                      {(modelList) => {
+                        const grouped = modelList().reduce((acc, model) => {
+                          const [provider] = model.split("/");
+                          if (!acc[provider]) acc[provider] = [];
+                          acc[provider].push(model);
+                          return acc;
+                        }, {} as Record<string, string[]>);
+                        return (
+                          <For each={Object.entries(grouped)}>
+                            {([provider, providerModels]) => (
+                              <optgroup label={provider}>
+                                <For each={providerModels}>
+                                  {(model) => <option value={model}>{model}</option>}
+                                </For>
+                              </optgroup>
+                            )}
+                          </For>
+                        );
+                      }}
+                    </Show>
+                  </select>
+                  <button
+                    class="btn sm"
+                    onClick={() => {
+                      const select = document.getElementById("sidekick-fallback-add") as HTMLSelectElement;
+                      const model = select.value;
+                      if (model) {
+                        const current = (getNestedValue(formData(), "sidekick.fallback_models") as string[] ?? []);
+                        if (!current.includes(model)) {
+                          handleFieldChange("sidekick.fallback_models", [...current, model]);
+                        }
+                        select.value = "";
+                      }
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </Show>
     </div>

@@ -158,6 +158,11 @@ export async function saveProjectConfig(
   return invoke("save_project_config", { projectPath, content });
 }
 
+export async function getAvailableModels(): Promise<string[]> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("get_available_models");
+}
+
 // ── Utilities ───────────────────────────────────────────────
 
 export function formatTimestamp(ts: number): string {

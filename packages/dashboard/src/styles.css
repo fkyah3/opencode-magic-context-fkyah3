@@ -902,3 +902,50 @@ select.config-input {
   min-width: 80px;
   text-align: right;
 }
+
+/* ── Model Chain UI ─────────────────────────────────────── */
+.model-chain-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  overflow: hidden;
+}
+
+.model-chain-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.model-chain-item:last-child {
+  border-bottom: none;
+}
+
+.model-chain-item .mono {
+  font-family: var(--mono-font);
+  font-size: 12px;
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-chain-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.model-chain-empty {
+  font-style: italic;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 12px;
+  text-align: center;
+}

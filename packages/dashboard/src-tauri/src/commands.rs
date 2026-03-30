@@ -209,6 +209,25 @@ pub fn save_project_config(project_path: String, content: String) -> Result<(), 
     config::write_config(&path, &content)
 }
 
+// ── Model commands ──────────────────────────────────────────
+
+#[tauri::command]
+pub fn get_available_models() -> Vec<String> {
+    match std::process::Command::new("opencode")
+        .arg("models")
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
 // ── Health commands ─────────────────────────────────────────
 
 #[tauri::command]
