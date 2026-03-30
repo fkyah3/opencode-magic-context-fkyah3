@@ -2,6 +2,7 @@ import { createSignal, createResource, Show, For, createMemo, type JSX } from "s
 import type { ProjectConfigEntry } from "../../lib/types";
 import { getConfig, saveConfig, getProjectConfigs, saveProjectConfig, getAvailableModels } from "../../lib/api";
 import ModelSelect from "./ModelSelect";
+import PerModelField from "./PerModelField";
 
 // ── JSONC helpers ───────────────────────────────────────────
 
@@ -38,8 +39,7 @@ const FIELD_DEFS: FieldDef[] = [
   { key: "enabled", label: "Enabled", type: "boolean", description: "Enable the magic-context plugin", section: "General" },
   { key: "ctx_reduce_enabled", label: "ctx_reduce Enabled", type: "boolean", description: "Enable ctx_reduce tool and nudges. When false, only heuristic cleanup and compartments manage context.", section: "General" },
   // Thresholds
-  { key: "cache_ttl", label: "Cache TTL", type: "string", description: "How long to wait before executing queued operations (e.g. '5m', '59m'). Can also be { default: '5m', 'model-key': '59m' }.", section: "Thresholds" },
-  { key: "execute_threshold_percentage", label: "Execute Threshold %", type: "number", description: "Context usage percentage (35–80) at which queued drops execute. Max 80.", section: "Thresholds" },
+  // cache_ttl and execute_threshold_percentage are rendered as custom PerModelField components
   { key: "nudge_interval_tokens", label: "Nudge Interval (tokens)", type: "number", description: "Token interval between rolling ctx_reduce nudges.", section: "Thresholds" },
   // Tags & cleanup
   { key: "protected_tags", label: "Protected Tags", type: "number", description: "Number of recent tags protected from drops.", section: "Tags & Cleanup" },
@@ -95,7 +95,7 @@ const SECTION_ICONS: Record<string, string> = {
 
 // Fields that should use range sliders (percentage or threshold values)
 const RANGE_SLIDER_FIELDS = new Set([
-  "execute_threshold_percentage",
+
   "history_budget_percentage",
   "nudge_interval_tokens",
   "protected_tags",
@@ -288,7 +288,32 @@ function ConfigForm(props: {
                     <span class="config-card-icon">{SECTION_ICONS[sectionName] || "📋"}</span>
                     <span class="config-card-title">{sectionName}</span>
                   </div>
-                  {sectionName === "Memory" ? (() => {
+                  {sectionName === "Thresholds" ? (
+                    <div class="config-card-content">
+                      <PerModelField
+                        label="Cache TTL"
+                        configKey="cache_ttl"
+                        description="How long to wait before executing queued operations."
+                        value={getNestedValue(formData(), "cache_ttl") ?? getNestedValue(parsed(), "cache_ttl")}
+                        onChange={(v) => handleFieldChange("cache_ttl", v)}
+                        models={models() ?? []}
+                        inputType="text"
+                        defaultPlaceholder="5m"
+                      />
+                      <PerModelField
+                        label="Execute Threshold %"
+                        configKey="execute_threshold_percentage"
+                        description="Context usage percentage (35–80) at which queued drops execute. Max 80."
+                        value={getNestedValue(formData(), "execute_threshold_percentage") ?? getNestedValue(parsed(), "execute_threshold_percentage")}
+                        onChange={(v) => handleFieldChange("execute_threshold_percentage", v)}
+                        models={models() ?? []}
+                        inputType="slider"
+                        sliderConfig={{ min: 35, max: 80, step: 1, suffix: "%", defaultValue: 65 }}
+                        defaultPlaceholder="65"
+                      />
+                      <For each={fields}>{renderField}</For>
+                    </div>
+                  ) : sectionName === "Memory" ? (() => {
                     const embeddingProvider = () => {
                       const v = getNestedValue(formData(), "embedding.provider");
                       return (v as string) || "local";

@@ -1080,6 +1080,42 @@ select.config-input {
   font-size: 12px;
 }
 
+/* Per-model field rows */
+.per-model-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.per-model-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.per-model-model {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 60px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.per-model-overrides {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
 .model-chain-list {
   display: flex;
   flex-direction: column;
