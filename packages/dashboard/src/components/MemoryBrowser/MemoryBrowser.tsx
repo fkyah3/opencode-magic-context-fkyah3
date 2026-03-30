@@ -33,8 +33,8 @@ export default function MemoryBrowser() {
 
   const [memories, { refetch: refetchMemories }] = createResource(fetchParams, getMemories);
   const [stats, { refetch: refetchStats }] = createResource(
-    () => projectFilter() || undefined,
-    (proj) => getMemoryStats(proj),
+    () => ({ project: projectFilter() || undefined }),
+    (params) => getMemoryStats(params.project),
   );
 
   // Group memories by category
