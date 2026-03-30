@@ -152,6 +152,15 @@ ctx_note(action="read")
 
 Notes surface automatically at natural work boundaries: after commits, after historian runs, and after all todos complete.
 
+**Smart notes** are project-scoped notes with an open-ended `surface_condition` that the dreamer evaluates nightly. When the condition is met, the note surfaces in the next session:
+
+```
+ctx_note(action="write", content="Implement X because Y", surface_condition="When PR #42 is merged in this repo")
+ctx_note(action="dismiss", note_id=1)
+```
+
+Smart notes require dreamer enabled. Pending notes are invisible until the dreamer marks them ready. Use `dismiss` to clear a surfaced note.
+
 ### `ctx_memory` — Persistent cross-session knowledge
 
 Architecture decisions, naming conventions, user preferences — anything that should survive across conversations. Memories are project-scoped and automatically promoted from session facts by the historian.
@@ -228,8 +237,11 @@ An optional background agent that maintains memory quality overnight:
 - **Archive stale** — retire memories referencing removed features or old paths
 - **Improve** — rewrite verbose memories into terse operational form
 - **Maintain docs** — update ARCHITECTURE.md and STRUCTURE.md from codebase changes
+- **Evaluate smart notes** — check pending smart note conditions and surface ready notes
 
 The dreamer runs during a configurable schedule window and creates ephemeral OpenCode child sessions for each task. Since it runs during idle time (typically overnight), it works well with local models — even slower ones like `ollama/mlx-qwen3.5-27b-claude-4.6-opus-reasoning-distilled` are fine since there's no user waiting.
+
+When dreamer is enabled, ARCHITECTURE.md and STRUCTURE.md are automatically injected into the agent's system prompt (configurable via `inject_docs`). Content is cached per-session and refreshed on cache-busting passes.
 
 ---
 
@@ -273,6 +285,7 @@ All durable states live in a local SQLite database. If the database can't be ope
 | `session_facts` | Categorized durable facts from historian runs |
 | `session_notes` | Session-scoped `ctx_note` content |
 | `session_meta` | Per-session state — usage, nudge flags, anchors |
+| `smart_notes` | Project-scoped smart notes with surface conditions |
 | `memories` | Cross-session persistent memories |
 | `memory_embeddings` | Embedding vectors for semantic search |
 | `dream_state` | Dreamer lease locking and task progress |

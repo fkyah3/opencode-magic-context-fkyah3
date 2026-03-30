@@ -129,6 +129,7 @@ Configures the dreamer agent — both the model it uses and the maintenance task
 | `max_runtime_minutes` | `number` | `120` | Max total runtime per dream session. |
 | `task_timeout_minutes` | `number` | `20` | Minutes allocated per individual task. |
 | `tasks` | `string[]` | `["consolidate", "verify", "archive-stale", "improve"]` | Tasks to run, in order. |
+| `inject_docs` | `boolean` | `true` | Inject ARCHITECTURE.md and STRUCTURE.md into the agent system prompt. Content is cached per-session and refreshed on cache-busting passes. |
 
 ### Available tasks
 

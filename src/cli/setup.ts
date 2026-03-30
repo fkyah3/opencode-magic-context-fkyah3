@@ -234,6 +234,31 @@ export async function runSetup(): Promise<number> {
     log.info("Disabled built-in compaction (auto=false, prune=false)");
     log.message("Magic Context handles context management — built-in compaction would interfere");
 
+    // ─── Step 4.5: Check for DCP plugin conflict ────────
+    if (paths.opencodeConfigFormat !== "none") {
+        const ocConfig = readJsonc(paths.opencodeConfig);
+        if (ocConfig) {
+            const plugins = (ocConfig.plugin as string[]) ?? [];
+            const dcpIndex = plugins.findIndex((p) => p.startsWith("@tarquinen/opencode-dcp"));
+            if (dcpIndex !== -1) {
+                log.warn(`Found conflicting plugin: ${plugins[dcpIndex]}`);
+                log.message(
+                    "opencode-dcp (Dynamic Context Pruning) and Magic Context both manage context.\n" +
+                        "Running both simultaneously will cause unpredictable behavior.",
+                );
+                const shouldRemove = await confirm("Remove opencode-dcp from your config?", true);
+                if (shouldRemove) {
+                    plugins.splice(dcpIndex, 1);
+                    ocConfig.plugin = plugins;
+                    writeFileSync(paths.opencodeConfig, `${JSON.stringify(ocConfig, null, 2)}\n`);
+                    log.success("Removed opencode-dcp from plugin list");
+                } else {
+                    log.warn("Skipped — you may experience context management conflicts");
+                }
+            }
+        }
+    }
+
     // ─── Step 5: Historian model ────────────────────────
     let historianModel: string | null = null;
     if (allModels.length > 0) {

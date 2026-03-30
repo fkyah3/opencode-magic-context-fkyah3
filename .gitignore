@@ -26,8 +26,10 @@ tmp/
 local-ignore/
 .planning/
 
-# Dashboard (not yet released — keep out of plugin package)
-packages/
+# Dashboard build artifacts
+packages/dashboard/dist/
+packages/dashboard/node_modules/
+packages/dashboard/src-tauri/target/
 .bg-shell/
 
 # Keep only the final animation; iteration folders stay local
