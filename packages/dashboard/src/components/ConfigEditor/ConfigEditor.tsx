@@ -368,9 +368,9 @@ function ConfigForm(props: {
               <span class="config-card-icon">🌙</span>
               <span class="config-card-title">DREAMER</span>
             </div>
-            <div class="config-card-content">
-              <div style={{ display: "grid", "grid-template-columns": "repeat(2, 1fr)", gap: "16px" }}>
-                {/* Enabled Toggle */}
+            <div class="config-card-two-col">
+              {/* Left: Enabled, Schedule, Inject Docs */}
+              <div class="config-card-content">
                 <div class="config-field">
                   <div class="config-field-header">
                     <label class="config-field-label">Enabled</label>
@@ -387,21 +387,6 @@ function ConfigForm(props: {
                   </label>
                 </div>
 
-                {/* Model Select */}
-                <div class="config-field">
-                  <div class="config-field-header">
-                    <label class="config-field-label">Model</label>
-                  </div>
-                  <span class="config-field-desc">Primary model for dreamer agent</span>
-                  <ModelSelect
-                    models={models() ?? []}
-                    value={getNestedValue(formData(), "dreamer.model") as string | undefined}
-                    onChange={(v) => handleFieldChange("dreamer.model", v || undefined)}
-                    placeholder="— Use fallback chain —"
-                  />
-                </div>
-
-                {/* Schedule */}
                 <div class="config-field">
                   <div class="config-field-header">
                     <label class="config-field-label">Schedule</label>
@@ -416,12 +401,11 @@ function ConfigForm(props: {
                   />
                 </div>
 
-                {/* Inject Docs Toggle */}
                 <div class="config-field">
                   <div class="config-field-header">
                     <label class="config-field-label">Inject Docs</label>
                   </div>
-                  <span class="config-field-desc">Inject documentation into dreamer context</span>
+                  <span class="config-field-desc">Inject ARCHITECTURE.md and STRUCTURE.md into agent context</span>
                   <label class="toggle-switch">
                     <input
                       type="checkbox"
@@ -434,48 +418,63 @@ function ConfigForm(props: {
                 </div>
               </div>
 
-              {/* Fallback Models */}
-              <div class="config-field">
-                <div class="config-field-header">
-                  <label class="config-field-label">Fallback Models</label>
-                </div>
-                <span class="config-field-desc">Models to try if primary fails</span>
-                <div class="model-chain-list">
-                  <Show
-                    when={(getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []).length > 0}
-                    fallback={<span class="model-chain-empty">Using built-in fallback chain</span>}
-                  >
-                    <For each={getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []}>
-                      {(model, index) => (
-                        <div class="model-chain-item">
-                          <span class="mono" style={{ flex: 1 }}>{model}</span>
-                          <button
-                            class="btn sm danger"
-                            onClick={() => {
-                              const current = (getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []);
-                              const updated = current.filter((_, i) => i !== index());
-                              handleFieldChange("dreamer.fallback_models", updated.length > 0 ? updated : undefined);
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      )}
-                    </For>
-                  </Show>
-                </div>
-                <div class="model-chain-add">
+              {/* Right: Model + Fallbacks */}
+              <div class="config-card-content">
+                <div class="config-field">
+                  <div class="config-field-header">
+                    <label class="config-field-label">Model</label>
+                  </div>
+                  <span class="config-field-desc">Primary model for dreamer agent</span>
                   <ModelSelect
-                    models={(models() ?? []).filter((m) => !(getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []).includes(m))}
-                    value={undefined}
-                    onChange={(v) => {
-                      if (v) {
-                        const current = (getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []);
-                        handleFieldChange("dreamer.fallback_models", [...current, v]);
-                      }
-                    }}
-                    placeholder="— Add fallback model —"
+                    models={models() ?? []}
+                    value={getNestedValue(formData(), "dreamer.model") as string | undefined}
+                    onChange={(v) => handleFieldChange("dreamer.model", v || undefined)}
+                    placeholder="— Use fallback chain —"
                   />
+                </div>
+
+                <div class="config-field">
+                  <div class="config-field-header">
+                    <label class="config-field-label">Fallback Models</label>
+                  </div>
+                  <span class="config-field-desc">Models to try if primary fails</span>
+                  <div class="model-chain-list">
+                    <Show
+                      when={(getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []).length > 0}
+                      fallback={<span class="model-chain-empty">Using built-in fallback chain</span>}
+                    >
+                      <For each={getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []}>
+                        {(model, index) => (
+                          <div class="model-chain-item">
+                            <span class="mono" style={{ flex: 1 }}>{model}</span>
+                            <button
+                              class="btn sm danger"
+                              onClick={() => {
+                                const current = (getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []);
+                                const updated = current.filter((_, i) => i !== index());
+                                handleFieldChange("dreamer.fallback_models", updated.length > 0 ? updated : undefined);
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
+                      </For>
+                    </Show>
+                  </div>
+                  <div class="model-chain-add">
+                    <ModelSelect
+                      models={(models() ?? []).filter((m) => !(getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []).includes(m))}
+                      value={undefined}
+                      onChange={(v) => {
+                        if (v) {
+                          const current = (getNestedValue(formData(), "dreamer.fallback_models") as string[] ?? []);
+                          handleFieldChange("dreamer.fallback_models", [...current, v]);
+                        }
+                      }}
+                      placeholder="— Add fallback model —"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
