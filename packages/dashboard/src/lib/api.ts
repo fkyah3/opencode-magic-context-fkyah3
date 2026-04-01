@@ -9,6 +9,7 @@ import type {
   SessionMetaRow,
   ContextTokenBreakdown,
   DreamQueueEntry,
+  DreamRun,
   DreamStateEntry,
   LogEntry,
   CacheEvent,
@@ -121,6 +122,16 @@ export async function getDreamState(): Promise<DreamStateEntry[]> {
   return invoke("get_dream_state");
 }
 
+export async function getDreamRuns(
+  projectPath?: string,
+  limit?: number,
+): Promise<DreamRun[]> {
+  return invoke("get_dream_runs", {
+    projectPath: projectPath ?? null,
+    limit: limit ?? 20,
+  });
+}
+
 export async function enqueueDream(
   projectPath: string,
   reason: string
@@ -201,7 +212,8 @@ export function formatRelativeTime(ts: number): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0) return `${days}d ago`;
+  if (days === 1) return "yesterday";
+  if (days > 1) return `${days}d ago`;
   if (hours > 0) return `${hours}h ago`;
   if (minutes > 0) return `${minutes}m ago`;
   return `${seconds}s ago`;

@@ -136,6 +136,34 @@ export interface DreamStateEntry {
   value: string;
 }
 
+export interface DreamRunTask {
+  name: string;
+  durationMs: number;
+  resultChars: number;
+  error?: string;
+}
+
+export interface DreamRunMemoryChanges {
+  written?: number;
+  deleted?: number;
+  archived?: number;
+  merged?: number;
+}
+
+export interface DreamRun {
+  id: number;
+  project_path: string;
+  started_at: number;
+  finished_at: number;
+  holder_id: string;
+  tasks_json: DreamRunTask[];
+  tasks_succeeded: number;
+  tasks_failed: number;
+  smart_notes_surfaced: number;
+  smart_notes_pending: number;
+  memory_changes_json: DreamRunMemoryChanges | null;
+}
+
 export interface LogEntry {
   timestamp: string;
   component: string;

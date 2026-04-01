@@ -1,7 +1,7 @@
+pub mod commands;
 pub mod config;
 pub mod db;
 pub mod log_parser;
-pub mod commands;
 
 use std::path::PathBuf;
 use std::sync::Mutex;

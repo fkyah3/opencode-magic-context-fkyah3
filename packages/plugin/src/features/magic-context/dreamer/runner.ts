@@ -8,6 +8,7 @@ import * as shared from "../../../shared";
 import { extractLatestAssistantText } from "../../../shared/assistant-message-extractor";
 import { getErrorMessage } from "../../../shared/error-message";
 import { log } from "../../../shared/logger";
+import { getMemoryCountsByStatus } from "../memory/storage-memory";
 import {
     getPendingSmartNotes,
     markSmartNoteChecked,
@@ -21,6 +22,7 @@ import {
     removeDreamEntry,
     resetDreamEntry,
 } from "./queue";
+import { insertDreamRun } from "./storage-dream-runs";
 import { getDreamState, setDreamState } from "./storage-dream-state";
 import { buildDreamTaskPrompt, DREAMER_SYSTEM_PROMPT } from "./task-prompts";
 
@@ -41,12 +43,25 @@ export interface DreamRunResult {
     startedAt: number;
     finishedAt: number;
     holderId: string;
+    smartNotesSurfaced: number;
+    smartNotesPending: number;
     tasks: {
         name: string;
         durationMs: number;
         result: unknown;
         error?: string;
     }[];
+}
+
+function countNewIds(beforeIds: number[], afterIds: number[]): number {
+    const beforeSet = new Set(beforeIds);
+    let count = 0;
+    for (const id of afterIds) {
+        if (!beforeSet.has(id)) {
+            count += 1;
+        }
+    }
+    return count;
 }
 
 export async function runDream(args: {
@@ -66,8 +81,11 @@ export async function runDream(args: {
         startedAt,
         finishedAt: startedAt,
         holderId,
+        smartNotesSurfaced: 0,
+        smartNotesPending: 0,
         tasks: [],
     };
+    const memoryCountsBefore = getMemoryCountsByStatus(args.db, args.projectIdentity);
 
     log(
         `[dreamer] starting dream run: ${args.tasks.length} tasks, timeout=${args.taskTimeoutMinutes}m, maxRuntime=${args.maxRuntimeMinutes}m, project=${args.projectIdentity}`,
@@ -269,6 +287,37 @@ export async function runDream(args: {
     }
 
     result.finishedAt = Date.now();
+    const memoryCountsAfter = getMemoryCountsByStatus(args.db, args.projectIdentity);
+    const merged = countNewIds(memoryCountsBefore.mergedIds, memoryCountsAfter.mergedIds);
+    const memoryChanges = {
+        written: countNewIds(memoryCountsBefore.ids, memoryCountsAfter.ids),
+        deleted: countNewIds(memoryCountsAfter.ids, memoryCountsBefore.ids),
+        archived: Math.max(
+            0,
+            countNewIds(memoryCountsBefore.archivedIds, memoryCountsAfter.archivedIds) - merged,
+        ),
+        merged,
+    };
+    const persistedMemoryChanges = Object.values(memoryChanges).some((value) => value > 0)
+        ? memoryChanges
+        : null;
+    insertDreamRun(args.db, {
+        projectPath: args.projectIdentity,
+        startedAt: result.startedAt,
+        finishedAt: result.finishedAt,
+        holderId: result.holderId,
+        tasks: result.tasks.map((task) => ({
+            name: task.name,
+            durationMs: task.durationMs,
+            resultChars: typeof task.result === "string" ? task.result.length : 0,
+            ...(task.error ? { error: task.error } : {}),
+        })),
+        tasksSucceeded: result.tasks.filter((task) => !task.error).length,
+        tasksFailed: result.tasks.filter((task) => Boolean(task.error)).length,
+        smartNotesSurfaced: result.smartNotesSurfaced,
+        smartNotesPending: result.smartNotesPending,
+        memoryChanges: persistedMemoryChanges,
+    });
     // Only update dream timestamps when at least one task succeeded — failed runs
     // should not block re-scheduling for the project.
     // Only count configured dream tasks for success — smart-note evaluation is supplementary
@@ -396,9 +445,8 @@ Only include notes whose conditions you could definitively evaluate. Skip notes 
         const jsonMatch = output.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
             log("[dreamer] smart notes: no JSON array found in output, skipping");
-            // Still mark all as checked
             for (const note of pendingNotes) markSmartNoteChecked(args.db, note.id);
-            return;
+            throw new Error("Smart note evaluation returned no JSON array.");
         }
 
         let evaluations: Array<{ id: number; met: boolean; reason?: string }>;
@@ -407,10 +455,9 @@ Only include notes whose conditions you could definitively evaluate. Skip notes 
         } catch {
             log(`[dreamer] smart notes: failed to parse JSON from LLM output, marking all checked`);
             for (const note of pendingNotes) markSmartNoteChecked(args.db, note.id);
-            return;
+            throw new Error("Smart note evaluation returned invalid JSON.");
         }
         let surfaced = 0;
-        let checked = 0;
         for (const evaluation of evaluations) {
             if (typeof evaluation.id !== "number") continue;
             const note = pendingNotes.find((n) => n.id === evaluation.id);
@@ -424,7 +471,6 @@ Only include notes whose conditions you could definitively evaluate. Skip notes 
                 );
             } else {
                 markSmartNoteChecked(args.db, note.id);
-                checked++;
             }
         }
 
@@ -436,17 +482,22 @@ Only include notes whose conditions you could definitively evaluate. Skip notes 
         }
 
         const durationMs = Date.now() - taskStartedAt;
+        const pending = Math.max(0, pendingNotes.length - surfaced);
+        args.result.smartNotesSurfaced = surfaced;
+        args.result.smartNotesPending = pending;
         log(
-            `[dreamer] smart notes: evaluated ${pendingNotes.length} notes in ${(durationMs / 1000).toFixed(1)}s — ${surfaced} surfaced, ${checked} still pending`,
+            `[dreamer] smart notes: evaluated ${pendingNotes.length} notes in ${(durationMs / 1000).toFixed(1)}s — ${surfaced} surfaced, ${pending} still pending`,
         );
         args.result.tasks.push({
             name: "smart-notes",
             durationMs,
-            result: `${surfaced} surfaced, ${checked} still pending`,
+            result: `${surfaced} surfaced, ${pending} still pending`,
         });
     } catch (error) {
         const durationMs = Date.now() - taskStartedAt;
         const errorMsg = getErrorMessage(error);
+        args.result.smartNotesSurfaced = 0;
+        args.result.smartNotesPending = pendingNotes.length;
         log(`[dreamer] smart notes: failed after ${(durationMs / 1000).toFixed(1)}s — ${errorMsg}`);
         args.result.tasks.push({
             name: "smart-notes",

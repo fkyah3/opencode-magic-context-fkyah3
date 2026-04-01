@@ -5,14 +5,8 @@ use std::path::PathBuf;
 pub fn resolve_user_config_path() -> PathBuf {
     let config_dir = std::env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs::home_dir()
-                .unwrap_or_default()
-                .join(".config")
-        });
-    config_dir
-        .join("opencode")
-        .join("magic-context.jsonc")
+        .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default().join(".config"));
+    config_dir.join("opencode").join("magic-context.jsonc")
 }
 
 pub fn resolve_project_config_path(project_path: &str) -> PathBuf {
@@ -48,8 +42,7 @@ pub fn write_config(path: &PathBuf, content: &str) -> Result<(), String> {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create directory: {}", e))?;
     }
-    std::fs::write(path, content)
-        .map_err(|e| format!("Failed to write config: {}", e))?;
+    std::fs::write(path, content).map_err(|e| format!("Failed to write config: {}", e))?;
     Ok(())
 }
 
@@ -67,18 +60,26 @@ pub struct ProjectConfigEntry {
 pub fn discover_project_configs() -> Vec<ProjectConfigEntry> {
     let opencode_db = {
         let data_dir = if cfg!(target_os = "windows") {
-            match dirs::data_dir() { Some(d) => d, None => return vec![] }
+            match dirs::data_dir() {
+                Some(d) => d,
+                None => return vec![],
+            }
         } else {
             std::env::var("XDG_DATA_HOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| {
-                    dirs::home_dir().unwrap_or_default().join(".local").join("share")
+                    dirs::home_dir()
+                        .unwrap_or_default()
+                        .join(".local")
+                        .join("share")
                 })
         };
         data_dir.join("opencode").join("opencode.db")
     };
 
-    if !opencode_db.exists() { return vec![]; }
+    if !opencode_db.exists() {
+        return vec![];
+    }
 
     let conn = match rusqlite::Connection::open_with_flags(
         &opencode_db,
@@ -106,7 +107,9 @@ pub fn discover_project_configs() -> Vec<ProjectConfigEntry> {
     let mut entries = Vec::new();
     for (name, worktree) in rows {
         let root_config = PathBuf::from(&worktree).join("magic-context.jsonc");
-        let alt_config = PathBuf::from(&worktree).join(".opencode").join("magic-context.jsonc");
+        let alt_config = PathBuf::from(&worktree)
+            .join(".opencode")
+            .join("magic-context.jsonc");
         let root_exists = root_config.exists();
         let alt_exists = alt_config.exists();
 

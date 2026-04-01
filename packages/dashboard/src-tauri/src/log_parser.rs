@@ -196,7 +196,10 @@ pub fn extract_cache_events(entries: &[LogEntry]) -> Vec<CacheEvent> {
 }
 
 /// Aggregate cache events into per-session stats, sorted by last activity (most recent first).
-pub fn aggregate_session_cache_stats(events: &[CacheEvent], limit: usize) -> Vec<SessionCacheStats> {
+pub fn aggregate_session_cache_stats(
+    events: &[CacheEvent],
+    limit: usize,
+) -> Vec<SessionCacheStats> {
     use std::collections::HashMap;
 
     struct Accum {
@@ -281,9 +284,9 @@ fn detect_bust_cause(entries: &[LogEntry], event_idx: usize) -> String {
     }
 
     // Check if the transform was a defer pass (no plugin-side mutations)
-    let is_defer_pass = entries[window_start..window_end].iter().any(|e| {
-        e.session_id == event.session_id && e.message.contains("decision=defer")
-    });
+    let is_defer_pass = entries[window_start..window_end]
+        .iter()
+        .any(|e| e.session_id == event.session_id && e.message.contains("decision=defer"));
 
     // If cache.read=0 on a defer pass, it's provider-side eviction
     if is_defer_pass && event.cache_read == Some(0) && event.cache_write.unwrap_or(0) > 0 {
@@ -316,7 +319,10 @@ fn detect_bust_cause(entries: &[LogEntry], event_idx: usize) -> String {
         if msg.contains("system prompt hash") {
             causes.push("System prompt hash change".to_string());
         }
-        if msg.contains("restart") || msg.contains("Restart") || msg.contains("injection cache cleared") {
+        if msg.contains("restart")
+            || msg.contains("Restart")
+            || msg.contains("injection cache cleared")
+        {
             causes.push("App restart".to_string());
         }
         if msg.contains("note nudge") && msg.contains("deliver") {

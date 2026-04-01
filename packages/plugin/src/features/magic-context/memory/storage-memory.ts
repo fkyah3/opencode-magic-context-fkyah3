@@ -84,7 +84,25 @@ const deleteMemoryEmbeddingStatements = new WeakMap<Database, PreparedStatement>
 const deleteEmbeddingOnContentUpdateStatements = new WeakMap<Database, PreparedStatement>();
 const getMemoryCountStatements = new WeakMap<Database, PreparedStatement>();
 const getMemoryCountByProjectStatements = new WeakMap<Database, PreparedStatement>();
+const getMemoryCountsByStatusStatements = new WeakMap<Database, PreparedStatement>();
 const memoriesByProjectStatements = new Map<string, WeakMap<Database, PreparedStatement>>();
+
+export interface MemoryCountsByStatus {
+    total: number;
+    active: number;
+    permanent: number;
+    archived: number;
+    merged: number;
+    ids: number[];
+    archivedIds: number[];
+    mergedIds: number[];
+}
+
+interface MemoryCountByStatusRow {
+    id: number;
+    status: MemoryStatus;
+    superseded_by_memory_id: number | null;
+}
 
 function getMemorySelectColumns(tableName = "memories"): string {
     return Object.entries(COLUMN_MAP)
@@ -114,6 +132,16 @@ function isNullableString(value: unknown): value is string | null {
 
 function isNullableNumber(value: unknown): value is number | null {
     return value === null || typeof value === "number";
+}
+
+function isMemoryCountByStatusRow(row: unknown): row is MemoryCountByStatusRow {
+    if (row === null || typeof row !== "object") return false;
+    const candidate = row as Record<string, unknown>;
+    return (
+        typeof candidate.id === "number" &&
+        isMemoryStatus(candidate.status) &&
+        isNullableNumber(candidate.superseded_by_memory_id)
+    );
 }
 
 export function isMemoryRow(row: unknown): row is Memory {
@@ -343,6 +371,17 @@ function getMemoryCountByProjectStatement(db: Database): PreparedStatement {
     return stmt;
 }
 
+function getMemoryCountsByStatusStatement(db: Database): PreparedStatement {
+    let stmt = getMemoryCountsByStatusStatements.get(db);
+    if (!stmt) {
+        stmt = db.prepare(
+            "SELECT id, status, superseded_by_memory_id FROM memories WHERE project_path = ?",
+        );
+        getMemoryCountsByStatusStatements.set(db, stmt);
+    }
+    return stmt;
+}
+
 export function insertMemory(db: Database, input: MemoryInput): Memory {
     const now = Date.now();
     const normalizedHash = computeNormalizedHash(input.content);
@@ -559,4 +598,45 @@ export function getMemoryCount(db: Database, projectPath?: string): number {
 
     const count = (result as Record<string, unknown>).count;
     return typeof count === "number" ? count : 0;
+}
+
+export function getMemoryCountsByStatus(db: Database, projectPath: string): MemoryCountsByStatus {
+    const rows = getMemoryCountsByStatusStatement(db)
+        .all(projectPath)
+        .filter(isMemoryCountByStatusRow);
+
+    const counts: MemoryCountsByStatus = {
+        total: rows.length,
+        active: 0,
+        permanent: 0,
+        archived: 0,
+        merged: 0,
+        ids: [],
+        archivedIds: [],
+        mergedIds: [],
+    };
+
+    for (const row of rows) {
+        counts.ids.push(row.id);
+
+        if (row.status === "active") {
+            counts.active += 1;
+        } else if (row.status === "permanent") {
+            counts.permanent += 1;
+        } else {
+            counts.archived += 1;
+            counts.archivedIds.push(row.id);
+        }
+
+        if (typeof row.superseded_by_memory_id === "number") {
+            counts.merged += 1;
+            counts.mergedIds.push(row.id);
+        }
+    }
+
+    counts.ids.sort((left, right) => left - right);
+    counts.archivedIds.sort((left, right) => left - right);
+    counts.mergedIds.sort((left, right) => left - right);
+
+    return counts;
 }

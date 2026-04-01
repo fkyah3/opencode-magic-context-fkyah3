@@ -124,6 +124,21 @@ export function initializeDatabase(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_dream_queue_project ON dream_queue(project_path);
 CREATE INDEX IF NOT EXISTS idx_dream_queue_pending ON dream_queue(started_at, enqueued_at);
 
+    CREATE TABLE IF NOT EXISTS dream_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_path TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      finished_at INTEGER NOT NULL,
+      holder_id TEXT NOT NULL,
+      tasks_json TEXT NOT NULL,
+      tasks_succeeded INTEGER NOT NULL DEFAULT 0,
+      tasks_failed INTEGER NOT NULL DEFAULT 0,
+      smart_notes_surfaced INTEGER NOT NULL DEFAULT 0,
+      smart_notes_pending INTEGER NOT NULL DEFAULT 0,
+      memory_changes_json TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_dream_runs_project ON dream_runs(project_path, finished_at DESC);
+
     CREATE TABLE IF NOT EXISTS smart_notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_path TEXT NOT NULL,

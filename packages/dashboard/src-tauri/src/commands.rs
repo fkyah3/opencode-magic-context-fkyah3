@@ -1,5 +1,5 @@
+use crate::{config, db, log_parser, AppState};
 use tauri::State;
-use crate::{db, log_parser, config, AppState};
 
 // ── Memory commands ─────────────────────────────────────────
 
@@ -149,6 +149,17 @@ pub fn get_dream_state(state: State<'_, AppState>) -> Result<Vec<db::DreamStateE
 }
 
 #[tauri::command]
+pub fn get_dream_runs(
+    state: State<'_, AppState>,
+    project_path: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<db::DreamRun>, String> {
+    let path = state.get_db_path()?;
+    let conn = db::open_readonly(&path).map_err(|e| e.to_string())?;
+    db::get_dream_runs(&conn, project_path.as_deref(), limit.unwrap_or(20))
+}
+
+#[tauri::command]
 pub fn enqueue_dream(
     state: State<'_, AppState>,
     project_path: String,
@@ -175,7 +186,10 @@ pub fn get_cache_events(max_lines: Option<usize>) -> Vec<log_parser::CacheEvent>
 }
 
 #[tauri::command]
-pub fn get_session_cache_stats(max_lines: Option<usize>, limit: Option<usize>) -> Vec<log_parser::SessionCacheStats> {
+pub fn get_session_cache_stats(
+    max_lines: Option<usize>,
+    limit: Option<usize>,
+) -> Vec<log_parser::SessionCacheStats> {
     let log_path = log_parser::resolve_log_path();
     let entries = log_parser::read_log_tail(&log_path, max_lines.unwrap_or(5000));
     let events = log_parser::extract_cache_events(&entries);
@@ -183,7 +197,10 @@ pub fn get_session_cache_stats(max_lines: Option<usize>, limit: Option<usize>) -
 }
 
 #[tauri::command]
-pub fn get_cache_events_from_db(limit: Option<usize>, since_timestamp: Option<i64>) -> Vec<db::DbCacheEvent> {
+pub fn get_cache_events_from_db(
+    limit: Option<usize>,
+    since_timestamp: Option<i64>,
+) -> Vec<db::DbCacheEvent> {
     db::get_cache_events_from_db(limit.unwrap_or(200), since_timestamp)
 }
 
@@ -253,7 +270,10 @@ pub async fn get_available_models() -> Vec<String> {
     } else {
         vec![
             "opencode".to_string(),
-            format!("{}/.local/bin/opencode", std::env::var("HOME").unwrap_or_default()),
+            format!(
+                "{}/.local/bin/opencode",
+                std::env::var("HOME").unwrap_or_default()
+            ),
             "/usr/local/bin/opencode".to_string(),
             "/opt/homebrew/bin/opencode".to_string(),
         ]
@@ -286,10 +306,7 @@ pub async fn test_embedding_endpoint(
     model: String,
     api_key: Option<String>,
 ) -> Result<String, String> {
-    let url = format!(
-        "{}/embeddings",
-        endpoint.trim_end_matches('/')
-    );
+    let url = format!("{}/embeddings", endpoint.trim_end_matches('/'));
 
     let body = serde_json::json!({
         "model": model,
@@ -305,7 +322,8 @@ pub async fn test_embedding_endpoint(
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| format!("Failed to create client: {}", e))?;
-    let mut req = client.post(&url)
+    let mut req = client
+        .post(&url)
         .header("Content-Type", "application/json")
         .json(&body);
 

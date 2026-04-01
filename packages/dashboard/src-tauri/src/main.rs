@@ -53,6 +53,7 @@ fn main() {
             // Dreamer
             commands::get_dream_queue,
             commands::get_dream_state,
+            commands::get_dream_runs,
             commands::enqueue_dream,
             // Logs & Cache
             commands::get_log_entries,

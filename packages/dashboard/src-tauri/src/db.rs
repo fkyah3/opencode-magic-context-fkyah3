@@ -199,6 +199,21 @@ pub struct DreamStateEntry {
     pub value: String,
 }
 
+#[derive(Debug, Serialize, Clone)]
+pub struct DreamRun {
+    pub id: i64,
+    pub project_path: String,
+    pub started_at: i64,
+    pub finished_at: i64,
+    pub holder_id: String,
+    pub tasks_json: serde_json::Value,
+    pub tasks_succeeded: i64,
+    pub tasks_failed: i64,
+    pub smart_notes_surfaced: i64,
+    pub smart_notes_pending: i64,
+    pub memory_changes_json: Option<serde_json::Value>,
+}
+
 // ── Context Token Breakdown ───────────────────────────────────
 
 #[derive(Debug, Serialize, Clone)]
@@ -442,7 +457,10 @@ fn build_log_cause_candidates() -> Vec<LogCauseCandidate> {
         .iter()
         .enumerate()
         .filter_map(|(idx, entry)| {
-            if entry.session_id.is_empty() || entry.cache_read.is_none() || entry.cache_write.is_none() {
+            if entry.session_id.is_empty()
+                || entry.cache_read.is_none()
+                || entry.cache_write.is_none()
+            {
                 return None;
             }
 
@@ -492,14 +510,19 @@ fn match_log_cause(
     }
 }
 
-fn load_raw_db_cache_events(limit: usize, since_timestamp: Option<i64>) -> Result<Vec<RawDbCacheEvent>, rusqlite::Error> {
+fn load_raw_db_cache_events(
+    limit: usize,
+    since_timestamp: Option<i64>,
+) -> Result<Vec<RawDbCacheEvent>, rusqlite::Error> {
     let Some(opencode_db_path) = resolve_opencode_db_path() else {
         return Ok(Vec::new());
     };
 
     let conn = open_readonly(&opencode_db_path)?;
 
-    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(since) = since_timestamp {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(since) =
+        since_timestamp
+    {
         (
             "SELECT CAST(m.id AS TEXT), m.session_id, m.time_created,
                     COALESCE(CAST(json_extract(m.data, '$.tokens.input') AS INTEGER), 0) AS input_tokens,
@@ -551,7 +574,11 @@ fn load_raw_db_cache_events(limit: usize, since_timestamp: Option<i64>) -> Resul
 }
 
 fn build_db_cache_events(rows: Vec<RawDbCacheEvent>, enrich_causes: bool) -> Vec<DbCacheEvent> {
-    let log_cause_candidates = if enrich_causes { build_log_cause_candidates() } else { Vec::new() };
+    let log_cause_candidates = if enrich_causes {
+        build_log_cause_candidates()
+    } else {
+        Vec::new()
+    };
 
     // Build a map of earliest timestamp per session in our window so we can
     // detect whether an event is truly the session's first message vs just
@@ -560,32 +587,43 @@ fn build_db_cache_events(rows: Vec<RawDbCacheEvent>, enrich_causes: bool) -> Vec
     for row in &rows {
         earliest_ts_in_window
             .entry(row.session_id.clone())
-            .and_modify(|ts| { if row.timestamp < *ts { *ts = row.timestamp; } })
+            .and_modify(|ts| {
+                if row.timestamp < *ts {
+                    *ts = row.timestamp;
+                }
+            })
             .or_insert(row.timestamp);
     }
 
     // Check which sessions truly have their first-ever assistant message in our window
     // by querying whether an earlier assistant message exists in the DB.
-    let true_first_sessions: HashSet<String> = if let Some(opencode_db_path) = resolve_opencode_db_path() {
-        if let Ok(conn) = open_readonly(&opencode_db_path) {
-            earliest_ts_in_window.iter().filter(|(session_id, &earliest_ts)| {
-                // If there's any assistant message with tokens BEFORE our earliest, it's not the first
-                let has_earlier: bool = conn.query_row(
-                    "SELECT EXISTS(SELECT 1 FROM message WHERE session_id = ?1
+    let true_first_sessions: HashSet<String> =
+        if let Some(opencode_db_path) = resolve_opencode_db_path() {
+            if let Ok(conn) = open_readonly(&opencode_db_path) {
+                earliest_ts_in_window
+                    .iter()
+                    .filter(|(session_id, &earliest_ts)| {
+                        // If there's any assistant message with tokens BEFORE our earliest, it's not the first
+                        let has_earlier: bool = conn
+                            .query_row(
+                                "SELECT EXISTS(SELECT 1 FROM message WHERE session_id = ?1
                      AND json_extract(data, '$.role') = 'assistant'
                      AND COALESCE(CAST(json_extract(data, '$.tokens.total') AS INTEGER), 0) > 0
                      AND time_created < ?2)",
-                    rusqlite::params![session_id, earliest_ts],
-                    |row| row.get(0),
-                ).unwrap_or(false);
-                !has_earlier
-            }).map(|(sid, _)| sid.clone()).collect()
+                                rusqlite::params![session_id, earliest_ts],
+                                |row| row.get(0),
+                            )
+                            .unwrap_or(false);
+                        !has_earlier
+                    })
+                    .map(|(sid, _)| sid.clone())
+                    .collect()
+            } else {
+                HashSet::new()
+            }
         } else {
             HashSet::new()
-        }
-    } else {
-        HashSet::new()
-    };
+        };
 
     let mut seen_sessions = HashSet::new();
     let mut chronological = Vec::with_capacity(rows.len());
@@ -599,7 +637,8 @@ fn build_db_cache_events(rows: Vec<RawDbCacheEvent>, enrich_causes: bool) -> Vec
         };
 
         let is_first_session_event = seen_sessions.insert(row.session_id.clone());
-        let is_truly_first = is_first_session_event && true_first_sessions.contains(&row.session_id);
+        let is_truly_first =
+            is_first_session_event && true_first_sessions.contains(&row.session_id);
         let (severity, cause) = if is_truly_first {
             (
                 "info".to_string(),
@@ -618,7 +657,11 @@ fn build_db_cache_events(rows: Vec<RawDbCacheEvent>, enrich_causes: bool) -> Vec
         } else if hit_ratio < 0.9 {
             (
                 "warning".to_string(),
-                if enrich_causes { match_log_cause(&log_cause_candidates, &row.session_id, row.timestamp) } else { None },
+                if enrich_causes {
+                    match_log_cause(&log_cause_candidates, &row.session_id, row.timestamp)
+                } else {
+                    None
+                },
             )
         } else {
             ("stable".to_string(), None)
@@ -676,7 +719,17 @@ pub fn get_session_cache_stats_from_db(limit: usize) -> Vec<SessionCacheStats> {
     let mut stats: Vec<(i64, SessionCacheStats)> = map
         .into_iter()
         .map(
-            |(session_id, (event_count, total_cache_read, total_cache_write, total_input, last_timestamp, bust_count))| {
+            |(
+                session_id,
+                (
+                    event_count,
+                    total_cache_read,
+                    total_cache_write,
+                    total_input,
+                    last_timestamp,
+                    bust_count,
+                ),
+            )| {
                 let total_prompt = total_cache_read + total_cache_write + total_input;
                 let hit_ratio = if total_prompt > 0 {
                     total_cache_read as f64 / total_prompt as f64
@@ -716,8 +769,14 @@ pub struct ProjectInfo {
 }
 
 pub fn get_projects(conn: &Connection) -> Result<Vec<ProjectInfo>, rusqlite::Error> {
-    let mut stmt =
-        conn.prepare("SELECT DISTINCT project_path FROM memories ORDER BY project_path")?;
+    let mut stmt = conn.prepare(
+        "SELECT project_path FROM memories
+         UNION
+         SELECT project_path FROM dream_queue
+         UNION
+         SELECT project_path FROM dream_runs
+         ORDER BY project_path",
+    )?;
     let identities: Vec<String> = stmt
         .query_map([], |row| row.get(0))?
         .collect::<Result<Vec<_>, _>>()?;
@@ -1443,6 +1502,87 @@ pub fn get_dream_state(conn: &Connection) -> Result<Vec<DreamStateEntry>, rusqli
     rows.collect()
 }
 
+fn parse_dream_run_json<T: serde::de::DeserializeOwned>(
+    value: &str,
+    column_index: usize,
+) -> Result<T, rusqlite::Error> {
+    serde_json::from_str(value).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            column_index,
+            rusqlite::types::Type::Text,
+            Box::new(error),
+        )
+    })
+}
+
+fn map_dream_run_row(row: &rusqlite::Row<'_>) -> Result<DreamRun, rusqlite::Error> {
+    let tasks_json_str: String = row.get(5)?;
+    let memory_changes_json_str: Option<String> = row.get(10)?;
+
+    Ok(DreamRun {
+        id: row.get(0)?,
+        project_path: row.get(1)?,
+        started_at: row.get(2)?,
+        finished_at: row.get(3)?,
+        holder_id: row.get(4)?,
+        tasks_json: parse_dream_run_json(&tasks_json_str, 5)?,
+        tasks_succeeded: row.get(6)?,
+        tasks_failed: row.get(7)?,
+        smart_notes_surfaced: row.get(8)?,
+        smart_notes_pending: row.get(9)?,
+        memory_changes_json: memory_changes_json_str
+            .as_deref()
+            .map(|value| parse_dream_run_json(value, 10))
+            .transpose()?,
+    })
+}
+
+pub fn get_dream_runs(
+    conn: &Connection,
+    project_path: Option<&str>,
+    limit: usize,
+) -> Result<Vec<DreamRun>, String> {
+    let normalized_limit = std::cmp::max(limit, 1) as i64;
+    let mut runs: Vec<DreamRun> = Vec::new();
+
+    if let Some(project_path) = project_path {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, project_path, started_at, finished_at, holder_id, tasks_json, tasks_succeeded, tasks_failed, smart_notes_surfaced, smart_notes_pending, memory_changes_json
+                 FROM dream_runs
+                 WHERE project_path = ?1
+                 ORDER BY finished_at DESC
+                 LIMIT ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query(rusqlite::params![project_path, normalized_limit])
+            .map_err(|e| e.to_string())?;
+        while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            let mapped = map_dream_run_row(row).map_err(|e| e.to_string())?;
+            runs.push(mapped);
+        }
+    } else {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, project_path, started_at, finished_at, holder_id, tasks_json, tasks_succeeded, tasks_failed, smart_notes_surfaced, smart_notes_pending, memory_changes_json
+                 FROM dream_runs
+                 ORDER BY finished_at DESC
+                 LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query(rusqlite::params![normalized_limit])
+            .map_err(|e| e.to_string())?;
+        while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            let mapped = map_dream_run_row(row).map_err(|e| e.to_string())?;
+            runs.push(mapped);
+        }
+    }
+
+    Ok(runs)
+}
+
 pub fn enqueue_dream(
     conn: &Connection,
     project_path: &str,
@@ -1460,14 +1600,14 @@ pub fn enqueue_dream(
 
 pub fn get_db_health(db_path: &PathBuf) -> DbHealth {
     let exists = db_path.exists();
-    let size_bytes = if exists {
+    let size_bytes: u64 = if exists {
         std::fs::metadata(db_path).map(|m| m.len()).unwrap_or(0)
     } else {
         0
     };
 
     let wal_path = db_path.with_extension("db-wal");
-    let wal_size_bytes = if wal_path.exists() {
+    let wal_size_bytes: u64 = if wal_path.exists() {
         std::fs::metadata(&wal_path).map(|m| m.len()).unwrap_or(0)
     } else {
         0

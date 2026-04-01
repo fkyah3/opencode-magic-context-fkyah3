@@ -11,6 +11,7 @@ const { acquireLease, getLeaseHolder, isLeaseActive, releaseLease, renewLease } 
 );
 const { ensureDreamQueueTable, enqueueDream } = await import("./queue");
 const { processDreamQueue, registerDreamProjectDirectory, runDream } = await import("./runner");
+const { getDreamRuns } = await import("./storage-dream-runs");
 const { getDreamState } = await import("./storage-dream-state");
 
 let db: Database | null = null;
@@ -139,6 +140,26 @@ describe("dreamer", () => {
             expect(isLeaseActive(db)).toBe(false);
             expect(createdSessionIds).toEqual(["dream-1", "dream-2"]);
             expect(deletedSessionIds).toEqual(["dream-1", "dream-2"]);
+
+            const runs = getDreamRuns(db, "/repo/project");
+            expect(runs).toHaveLength(1);
+            expect(runs[0]?.tasks_succeeded).toBe(2);
+            expect(runs[0]?.tasks_failed).toBe(0);
+            expect(runs[0]?.smart_notes_surfaced).toBe(0);
+            expect(runs[0]?.smart_notes_pending).toBe(0);
+            expect(runs[0]?.memory_changes_json).toBeNull();
+            expect(JSON.parse(runs[0]?.tasks_json ?? "[]")).toEqual([
+                expect.objectContaining({
+                    name: "consolidate",
+                    durationMs: expect.any(Number),
+                    resultChars: expect.any(Number),
+                }),
+                expect.objectContaining({
+                    name: "verify",
+                    durationMs: expect.any(Number),
+                    resultChars: expect.any(Number),
+                }),
+            ]);
         });
 
         it("processes the next queued dream and removes the queue entry", async () => {

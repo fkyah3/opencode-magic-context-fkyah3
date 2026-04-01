@@ -597,7 +597,7 @@ export default function SessionViewer() {
                           </div>
 
                           {/* Divider */}
-                          <div style={{ borderTop: "1px solid var(--border-color)", margin: "8px 0" }} />
+                          <div style={{ "border-top": "1px solid var(--border-color)", margin: "8px 0" }} />
 
                           {/* Total */}
                           <div style={{ display: "flex", "justify-content": "space-between", "align-items": "center" }}>
