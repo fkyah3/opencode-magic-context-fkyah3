@@ -1,5 +1,7 @@
-import type { DreamerConfig } from "../config/schema/magic-context";
+import type { DreamerConfig, EmbeddingConfig } from "../config/schema/magic-context";
 import { checkScheduleAndEnqueue, processDreamQueue } from "../features/magic-context/dreamer";
+import { embedUnembeddedMemories } from "../features/magic-context/memory/embedding";
+import { resolveProjectIdentity } from "../features/magic-context/memory/project-identity";
 import { openDatabase } from "../features/magic-context/storage";
 import { log } from "../shared/logger";
 import type { PluginContext } from "./types";
@@ -15,17 +17,42 @@ const DREAM_TIMER_INTERVAL_MS = 15 * 60 * 1000;
  * The timer is unref'd so it doesn't prevent the process from exiting.
  */
 export function startDreamScheduleTimer(args: {
+    directory: string;
     client: PluginContext["client"];
-    dreamerConfig: DreamerConfig;
+    dreamerConfig?: DreamerConfig;
+    embeddingConfig: EmbeddingConfig;
+    memoryEnabled: boolean;
 }): (() => void) | undefined {
-    const { client, dreamerConfig } = args;
+    const { client, directory, dreamerConfig, embeddingConfig, memoryEnabled } = args;
+    const dreamingEnabled = Boolean(dreamerConfig?.enabled && dreamerConfig.schedule?.trim());
+    const embeddingSweepEnabled = memoryEnabled && embeddingConfig.provider !== "off";
 
-    if (!dreamerConfig.enabled || !dreamerConfig.schedule?.trim()) {
+    if (!dreamingEnabled && !embeddingSweepEnabled) {
         return;
     }
 
+    const projectPath = embeddingSweepEnabled ? resolveProjectIdentity(directory) : null;
+
     const timer = setInterval(() => {
         try {
+            if (embeddingSweepEnabled && projectPath) {
+                void embedUnembeddedMemories(openDatabase(), projectPath, embeddingConfig)
+                    .then((embeddedCount) => {
+                        if (embeddedCount > 0) {
+                            log(
+                                `[magic-context] proactively embedded ${embeddedCount} ${embeddedCount === 1 ? "memory" : "memories"} for project ${projectPath}`,
+                            );
+                        }
+                    })
+                    .catch((error: unknown) => {
+                        log("[magic-context] periodic memory embedding sweep failed:", error);
+                    });
+            }
+
+            if (!dreamingEnabled || !dreamerConfig?.schedule?.trim()) {
+                return;
+            }
+
             const db = openDatabase();
             checkScheduleAndEnqueue(db, dreamerConfig.schedule);
 
@@ -39,7 +66,7 @@ export function startDreamScheduleTimer(args: {
                 log("[dreamer] timer-triggered queue processing failed:", error);
             });
         } catch (error) {
-            log("[dreamer] timer-triggered schedule check failed:", error);
+            log("[magic-context] timer-triggered maintenance check failed:", error);
         }
     }, DREAM_TIMER_INTERVAL_MS);
 

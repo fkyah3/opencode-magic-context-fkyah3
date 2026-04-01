@@ -17,7 +17,7 @@ import {
 } from "../../features/magic-context/memory";
 import { embedText, getEmbeddingModelId } from "../../features/magic-context/memory/embedding";
 import { computeNormalizedHash } from "../../features/magic-context/memory/normalize-hash";
-import { log } from "../../shared/logger";
+import { sessionLog } from "../../shared/logger";
 import { CTX_MEMORY_DESCRIPTION, CTX_MEMORY_TOOL_NAME, DEFAULT_SEARCH_LIMIT } from "./constants";
 import {
     CTX_MEMORY_DREAMER_ACTIONS,
@@ -117,16 +117,39 @@ function filterByCategory(memories: Memory[], category?: string): Memory[] {
     return memories.filter((memory) => memory.category === category);
 }
 
-function queueMemoryEmbedding(deps: CtxMemoryToolDeps, memoryId: number, content: string): void {
+function queueMemoryEmbedding(args: {
+    deps: CtxMemoryToolDeps;
+    sessionId: string;
+    memoryId: number;
+    content: string;
+}): void {
+    if (!args.deps.embeddingEnabled) {
+        return;
+    }
+
     void (async () => {
-        const embedding = await embedText(content);
+        const embedding = await embedText(args.content);
         if (!embedding) {
+            sessionLog(
+                args.sessionId,
+                `memory embedding skipped for memory ${args.memoryId}: provider unavailable or embedding generation failed.`,
+            );
             return;
         }
 
-        saveEmbedding(deps.db, memoryId, embedding, getEmbeddingModelId());
+        const modelId = getEmbeddingModelId();
+        if (modelId === "off") {
+            sessionLog(
+                args.sessionId,
+                `memory embedding skipped for memory ${args.memoryId}: embedding provider is off.`,
+            );
+            return;
+        }
+
+        saveEmbedding(args.deps.db, args.memoryId, embedding, modelId);
+        sessionLog(args.sessionId, `proactively embedded memory ${args.memoryId}.`);
     })().catch((error: unknown) => {
-        log("[ctx-memory] failed to save memory embedding:", error);
+        sessionLog(args.sessionId, `memory embedding failed for memory ${args.memoryId}:`, error);
     });
 }
 
@@ -231,7 +254,12 @@ function createCtxMemoryTool(deps: CtxMemoryToolDeps): ToolDefinition {
                         toolContext.agent === DREAMER_AGENT ? "dreamer" : getSourceType(deps),
                 });
 
-                queueMemoryEmbedding(deps, memory.id, content);
+                queueMemoryEmbedding({
+                    deps,
+                    sessionId: toolContext.sessionID,
+                    memoryId: memory.id,
+                    content,
+                });
 
                 return `Saved memory [ID: ${memory.id}] in ${category}.`;
             }
@@ -288,7 +316,12 @@ function createCtxMemoryTool(deps: CtxMemoryToolDeps): ToolDefinition {
                 }
 
                 updateMemoryContent(deps.db, memory.id, content, normalizedHash);
-                queueMemoryEmbedding(deps, memory.id, content);
+                queueMemoryEmbedding({
+                    deps,
+                    sessionId: toolContext.sessionID,
+                    memoryId: memory.id,
+                    content,
+                });
 
                 return `Updated memory [ID: ${memory.id}] in ${memory.category}.`;
             }
@@ -415,7 +448,12 @@ function createCtxMemoryTool(deps: CtxMemoryToolDeps): ToolDefinition {
                     return nextCanonical;
                 })();
 
-                queueMemoryEmbedding(deps, canonicalMemory.id, content);
+                queueMemoryEmbedding({
+                    deps,
+                    sessionId: toolContext.sessionID,
+                    memoryId: canonicalMemory.id,
+                    content,
+                });
 
                 const supersededIds = sourceMemories
                     .map((memory) => memory.id)

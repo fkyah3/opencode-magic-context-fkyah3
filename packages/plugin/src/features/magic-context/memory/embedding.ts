@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import type { EmbeddingConfig } from "../../../config/schema/magic-context";
 import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "../../../config/schema/magic-context";
 import { log } from "../../../shared/logger";
@@ -6,6 +7,7 @@ import { LocalEmbeddingProvider } from "./embedding-local";
 import { OpenAICompatibleEmbeddingProvider } from "./embedding-openai";
 import type { EmbeddingProvider } from "./embedding-provider";
 import { computeNormalizedHash } from "./normalize-hash";
+import { saveEmbedding } from "./storage-memory-embeddings";
 
 const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
     provider: "local",
@@ -14,6 +16,36 @@ const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
 
 let embeddingConfig: EmbeddingConfig = DEFAULT_EMBEDDING_CONFIG;
 let provider: EmbeddingProvider | null = null;
+
+type PreparedStatement = ReturnType<Database["prepare"]>;
+
+interface UnembeddedMemoryRow {
+    id: number;
+    content: string;
+}
+
+const loadUnembeddedMemoriesStatements = new WeakMap<Database, PreparedStatement>();
+
+function isUnembeddedMemoryRow(row: unknown): row is UnembeddedMemoryRow {
+    if (row === null || typeof row !== "object") {
+        return false;
+    }
+
+    const candidate = row as Record<string, unknown>;
+    return typeof candidate.id === "number" && typeof candidate.content === "string";
+}
+
+function getLoadUnembeddedMemoriesStatement(db: Database): PreparedStatement {
+    let stmt = loadUnembeddedMemoriesStatements.get(db);
+    if (!stmt) {
+        stmt = db.prepare(
+            "SELECT m.id AS id, m.content AS content FROM memories m LEFT JOIN memory_embeddings me ON m.id = me.memory_id WHERE m.project_path = ? AND m.status = 'active' AND me.memory_id IS NULL LIMIT ?",
+        );
+        loadUnembeddedMemoriesStatements.set(db, stmt);
+    }
+
+    return stmt;
+}
 
 function resolveEmbeddingConfig(config?: EmbeddingConfig): EmbeddingConfig {
     if (!config || config.provider === "local") {
@@ -138,6 +170,55 @@ export async function embedBatch(texts: string[]): Promise<(Float32Array | null)
     }
 
     return currentProvider.embedBatch(texts);
+}
+
+export async function embedUnembeddedMemories(
+    db: Database,
+    projectPath: string,
+    config: EmbeddingConfig,
+    batchSize = 10,
+): Promise<number> {
+    const normalizedBatchSize = Math.max(1, Math.floor(batchSize));
+    const resolvedConfig = resolveEmbeddingConfig(config);
+
+    if (resolvedConfig.provider === "off") {
+        return 0;
+    }
+
+    initializeEmbedding(resolvedConfig);
+
+    const memories = getLoadUnembeddedMemoriesStatement(db)
+        .all(projectPath, normalizedBatchSize)
+        .filter(isUnembeddedMemoryRow);
+    if (memories.length === 0) {
+        return 0;
+    }
+
+    try {
+        const embeddings = await embedBatch(memories.map((memory) => memory.content));
+        const modelId = getEmbeddingModelId();
+        if (modelId === "off") {
+            return 0;
+        }
+
+        let embeddedCount = 0;
+        db.transaction(() => {
+            for (const [index, memory] of memories.entries()) {
+                const embedding = embeddings[index];
+                if (!embedding) {
+                    continue;
+                }
+
+                saveEmbedding(db, memory.id, embedding, modelId);
+                embeddedCount += 1;
+            }
+        })();
+
+        return embeddedCount;
+    } catch (error) {
+        log("[magic-context] failed to proactively embed missing memories:", error);
+        return 0;
+    }
 }
 
 export function getEmbeddingModelId(): string {

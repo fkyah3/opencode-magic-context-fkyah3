@@ -34,10 +34,13 @@ const plugin: Plugin = async (ctx) => {
 
     // Start independent dream schedule timer at plugin level (not inside hooks)
     // so overnight dreaming works even when the user isn't chatting.
-    if (pluginConfig.dreamer) {
+    if (pluginConfig.enabled) {
         startDreamScheduleTimer({
+            directory: ctx.directory,
             client: ctx.client,
             dreamerConfig: pluginConfig.dreamer,
+            embeddingConfig: pluginConfig.embedding,
+            memoryEnabled: pluginConfig.memory?.enabled === true,
         });
     }
 
