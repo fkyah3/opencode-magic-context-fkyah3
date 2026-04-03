@@ -53,6 +53,12 @@ export function createScheduler(config: SchedulerConfig): Scheduler {
             sessionId?: string,
             modelKey?: string,
         ): SchedulerDecision {
+            // Brand-new sessions (no usage, no baseline) have nothing to execute.
+            // Skip the TTL check that would always fire due to lastResponseTime=0.
+            if (contextUsage.percentage === 0 && sessionMeta.lastResponseTime === 0) {
+                return "defer";
+            }
+
             const threshold = resolveExecuteThreshold(
                 config.executeThresholdPercentage,
                 modelKey,

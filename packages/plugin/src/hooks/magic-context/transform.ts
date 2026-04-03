@@ -13,6 +13,7 @@ import type { ContextUsage, TagEntry } from "../../features/magic-context/types"
 import type { PluginContext } from "../../plugin/types";
 import { sessionLog } from "../../shared/logger";
 import { FORCE_MATERIALIZE_PERCENTAGE } from "./compartment-trigger";
+import { resolveExecuteThreshold } from "./event-resolvers";
 import {
     type PreparedCompartmentInjection,
     prepareCompartmentInjection,
@@ -265,11 +266,10 @@ export function createTransform(deps: TransformDeps) {
                 deps.historyBudgetPercentage && contextUsage.percentage > 0
                     ? Math.floor(
                           (contextUsage.inputTokens / (contextUsage.percentage / 100)) *
-                              (Math.min(
-                                  typeof deps.executeThresholdPercentage === "number"
-                                      ? deps.executeThresholdPercentage
-                                      : (deps.executeThresholdPercentage?.default ?? 80),
-                                  80,
+                              (resolveExecuteThreshold(
+                                  deps.executeThresholdPercentage ?? 65,
+                                  deps.getModelKey?.(sessionId),
+                                  65,
                               ) /
                                   100) *
                               deps.historyBudgetPercentage,

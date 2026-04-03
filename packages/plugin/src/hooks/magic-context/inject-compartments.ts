@@ -134,14 +134,15 @@ export function prepareCompartmentInjection(
                 const remaining = messages.slice(cutoffIndex + 1);
                 messages.splice(0, messages.length, ...remaining);
             } else {
-                // Anchored message no longer in array (dropped/compacted).
-                // Invalidate cache to avoid injecting history with stale boundaries.
+                // Boundary message not in array — covered messages were already
+                // trimmed by OpenCode (compaction, old history not sent). The splice
+                // is effectively a no-op because there's nothing to splice out.
+                // Keep the cached injection so <session-history> stays stable on
+                // defer passes instead of alternating between injected/not-injected.
                 sessionLog(
                     sessionId,
-                    `compartment injection: cached boundary ${cached.compartmentEndMessageId} not found in messages, invalidating cache`,
+                    `compartment injection: cached boundary ${cached.compartmentEndMessageId} not in messages (already trimmed), reusing cache`,
                 );
-                injectionCache.delete(sessionId);
-                return null;
             }
         }
         return cached;

@@ -8,6 +8,8 @@ export interface ConfigPaths {
     opencodeConfigFormat: "json" | "jsonc" | "none";
     magicContextConfig: string;
     omoConfig: string | null; // oh-my-opencode.json(c) if exists
+    tuiConfig: string;
+    tuiConfigFormat: "json" | "jsonc" | "none";
 }
 
 function getConfigDir(): string {
@@ -43,6 +45,8 @@ export function detectConfigPaths(): ConfigPaths {
 
     let opencodeConfig: string;
     let opencodeConfigFormat: "json" | "jsonc" | "none";
+    let tuiConfig: string;
+    let tuiConfigFormat: "json" | "jsonc" | "none";
 
     const jsoncPath = join(configDir, "opencode.jsonc");
     const jsonPath = join(configDir, "opencode.json");
@@ -58,11 +62,27 @@ export function detectConfigPaths(): ConfigPaths {
         opencodeConfigFormat = "none";
     }
 
+    const tuiJsoncPath = join(configDir, "tui.jsonc");
+    const tuiJsonPath = join(configDir, "tui.json");
+
+    if (existsSync(tuiJsoncPath)) {
+        tuiConfig = tuiJsoncPath;
+        tuiConfigFormat = "jsonc";
+    } else if (existsSync(tuiJsonPath)) {
+        tuiConfig = tuiJsonPath;
+        tuiConfigFormat = "json";
+    } else {
+        tuiConfig = tuiJsonPath;
+        tuiConfigFormat = "none";
+    }
+
     return {
         configDir,
         opencodeConfig,
         opencodeConfigFormat,
         magicContextConfig: join(configDir, "magic-context.jsonc"),
         omoConfig: findOmoConfig(configDir),
+        tuiConfig,
+        tuiConfigFormat,
     };
 }

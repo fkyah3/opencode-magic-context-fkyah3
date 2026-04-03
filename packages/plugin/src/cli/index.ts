@@ -1,21 +1,25 @@
 #!/usr/bin/env node
+import { runDoctor } from "./doctor";
 import { runSetup } from "./setup";
 
 const command = process.argv[2];
 
 if (command === "setup") {
     runSetup().then((code) => process.exit(code));
+} else if (command === "doctor") {
+    runDoctor().then((code) => process.exit(code));
 } else {
     console.log("");
     console.log("  Magic Context CLI");
     console.log("  ─────────────────");
     console.log("");
     console.log("  Commands:");
-    console.log("    setup    Interactive setup wizard");
+    console.log("    setup    Interactive setup wizard (first-time install)");
+    console.log("    doctor   Check and fix configuration issues");
     console.log("");
     console.log("  Usage:");
     console.log("    bunx @cortexkit/opencode-magic-context setup");
-    console.log("    npx @cortexkit/opencode-magic-context setup");
+    console.log("    bunx @cortexkit/opencode-magic-context doctor");
     console.log("");
     process.exit(command ? 1 : 0);
 }

@@ -1,4 +1,7 @@
 /// <reference types="bun-types" />
+// Tests exercise server-side (Desktop) notification behavior — set OPENCODE_CLIENT
+// to prevent the TUI toast path from intercepting sendIgnoredMessage calls.
+process.env.OPENCODE_CLIENT = "desktop";
 
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";

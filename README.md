@@ -37,6 +37,8 @@ Your agent should never stop working to manage its own context. Magic Context is
 
 **4.** On-demand sidekick that augments prompts with relevant project context.
 
+**5.** TUI sidebar with live context breakdown, token usage, historian status, and memory counts — right inside the terminal.
+
 ---
 
 ## Get Started
@@ -86,6 +88,7 @@ Create `magic-context.jsonc` in your project root, `.opencode/`, or `~/.config/o
 
 ```jsonc
 {
+  "$schema": "https://raw.githubusercontent.com/cortexkit/opencode-magic-context/master/assets/magic-context.schema.json",
   "enabled": true,
 
   // Which model the historian uses for background compression, 
@@ -96,6 +99,8 @@ Create `magic-context.jsonc` in your project root, `.opencode/`, or `~/.config/o
   }
 }
 ```
+
+> **Tip:** The `$schema` key enables autocomplete and validation in VS Code and other editors.
 
 That's it. Everything else has sensible defaults. Project config merges on top of user-wide settings.
 
@@ -114,6 +119,16 @@ If you use [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (f
 ```
 
 The setup wizard handles this automatically if it detects an oh-my-openagent or oh-my-opencode config.
+
+### Doctor (Troubleshooting)
+
+Already installed but something isn't working? Run the doctor to check and auto-fix configuration issues:
+
+```bash
+bunx @cortexkit/opencode-magic-context doctor
+```
+
+Doctor checks for conflicts (compaction, DCP, OMO hooks), ensures the TUI sidebar is configured, and verifies the plugin is registered — fixing what it can automatically.
 
 ---
 
@@ -243,6 +258,30 @@ The dreamer runs during a configurable schedule window and creates ephemeral Ope
 
 When dreamer is enabled, ARCHITECTURE.md and STRUCTURE.md are automatically injected into the agent's system prompt (configurable via `inject_docs`). Content is cached per-session and refreshed on cache-busting passes.
 
+### TUI Sidebar
+
+When running in OpenCode's terminal UI, Magic Context shows a live sidebar panel with:
+
+- **Context breakdown bar** — visual token split across System Prompt, Compartments, Facts, Memories, and Conversation
+- **Historian status** — idle, running, or compartment/fact counts
+- **Memory counts** — total project memories and how many are injected
+- **Dreamer status** — last run time
+- **Queue status** — pending operations count
+
+The sidebar updates after every message. Commands (`/ctx-status`, `/ctx-flush`, `/ctx-aug`) also work directly in TUI mode via dialogs and toasts.
+
+The TUI plugin is configured automatically by the setup wizard and the `doctor` command. If you installed manually, add to your `tui.json` or `tui.jsonc`:
+
+```jsonc
+{
+  "plugin": ["@cortexkit/opencode-magic-context"]
+}
+```
+
+### Startup conflict detection
+
+On startup, Magic Context checks for common configuration problems — OpenCode's built-in compaction being enabled, DCP plugin being active alongside Magic Context, or conflicting oh-my-openagent hooks. When conflicts are detected, it warns the active session with a fix suggestion pointing to `bunx @cortexkit/opencode-magic-context doctor`.
+
 ---
 
 ## Commands
@@ -290,6 +329,8 @@ All durable states live in a local SQLite database. If the database can't be ope
 | `memory_embeddings` | Embedding vectors for semantic search |
 | `dream_state` | Dreamer lease locking and task progress |
 | `dream_queue` | Queued projects awaiting dream processing |
+| `dream_runs` | Per-project dream run history — task names, durations, memory changes |
+| `compression_depth` | Per-message compression depth for weighted compressor selection |
 | `message_history_fts` | FTS5 index of user/assistant message text for `ctx_search` |
 | `message_history_index` | Tracks last indexed ordinal per session for incremental FTS population |
 | `recomp_compartments` | Staging for `/ctx-recomp` partial progress |

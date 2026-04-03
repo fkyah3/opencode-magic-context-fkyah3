@@ -231,10 +231,11 @@ export function replaceSessionFacts(
     db.transaction(() => {
         db.prepare("DELETE FROM session_facts WHERE session_id = ?").run(sessionId);
         insertFactRows(db, sessionId, facts, now);
-        // Clear cached memory block so next injection renders fresh
-        db.prepare(
-            "UPDATE session_meta SET memory_block_cache = '', memory_block_count = 0 WHERE session_id = ?",
-        ).run(sessionId);
+        // Clear cached injection block so next pass renders fresh — preserve memory_block_count
+        // because memories didn't change (only facts), and the dashboard reads count between busts
+        db.prepare("UPDATE session_meta SET memory_block_cache = '' WHERE session_id = ?").run(
+            sessionId,
+        );
     })();
 }
 
@@ -260,10 +261,11 @@ export function replaceAllCompartmentState(
         insertCompartmentRows(db, sessionId, compartments, now);
         insertFactRows(db, sessionId, facts, now);
 
-        // Clear cached memory block so next injection renders fresh (historian run already busts cache)
-        db.prepare(
-            "UPDATE session_meta SET memory_block_cache = '', memory_block_count = 0 WHERE session_id = ?",
-        ).run(sessionId);
+        // Clear cached injection block so next pass renders fresh — preserve memory_block_count
+        // because memories didn't change (only compartments/facts), and the dashboard reads count between busts
+        db.prepare("UPDATE session_meta SET memory_block_cache = '' WHERE session_id = ?").run(
+            sessionId,
+        );
     })();
 }
 
@@ -413,10 +415,10 @@ export function promoteRecompStaging(
         db.prepare("DELETE FROM recomp_compartments WHERE session_id = ?").run(sessionId);
         db.prepare("DELETE FROM recomp_facts WHERE session_id = ?").run(sessionId);
 
-        // Clear cached memory block
-        db.prepare(
-            "UPDATE session_meta SET memory_block_cache = '', memory_block_count = 0 WHERE session_id = ?",
-        ).run(sessionId);
+        // Clear cached injection block — preserve memory_block_count (memories didn't change)
+        db.prepare("UPDATE session_meta SET memory_block_cache = '' WHERE session_id = ?").run(
+            sessionId,
+        );
 
         return { compartments: staging.compartments, facts: staging.facts };
     })();

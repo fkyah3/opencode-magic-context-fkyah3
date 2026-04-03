@@ -1,5 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { parse as parseJsonc, stringify as stringifyJsonc } from "comment-json";
+import { detectConflicts } from "../shared/conflict-detector";
+import { fixConflicts } from "../shared/conflict-fixer";
 import { detectConfigPaths } from "./config-paths";
 import {
     buildModelSelection,
@@ -19,57 +22,10 @@ function ensureDir(dir: string): void {
     }
 }
 
-function stripJsoncToJson(text: string): string {
-    let result = "";
-    let i = 0;
-    let inString = false;
-    let escaped = false;
-
-    while (i < text.length) {
-        const ch = text[i];
-
-        if (escaped) {
-            result += ch;
-            escaped = false;
-            i++;
-            continue;
-        }
-
-        if (inString) {
-            if (ch === "\\") escaped = true;
-            else if (ch === '"') inString = false;
-            result += ch;
-            i++;
-            continue;
-        }
-
-        // Line comment
-        if (ch === "/" && text[i + 1] === "/") {
-            while (i < text.length && text[i] !== "\n") i++;
-            continue;
-        }
-
-        // Block comment
-        if (ch === "/" && text[i + 1] === "*") {
-            i += 2;
-            while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
-            i += 2;
-            continue;
-        }
-
-        if (ch === '"') inString = true;
-        result += ch;
-        i++;
-    }
-
-    // Strip trailing commas before } or ]
-    return result.replace(/,(\s*[}\]])/g, "$1");
-}
-
 function readJsonc(path: string): Record<string, unknown> | null {
     const content = readFileSync(path, "utf-8");
     try {
-        return JSON.parse(stripJsoncToJson(content));
+        return parseJsonc(content) as Record<string, unknown>;
     } catch (err) {
         console.error(`  ⚠ Failed to parse ${path}: ${err instanceof Error ? err.message : err}`);
         return null;
@@ -85,7 +41,7 @@ function addPluginToOpenCodeConfig(configPath: string, format: "json" | "jsonc" 
             plugin: [PLUGIN_NAME],
             compaction: { auto: false, prune: false },
         };
-        writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+        writeFileSync(configPath, `${stringifyJsonc(config, null, 2)}\n`);
         return;
     }
 
@@ -110,7 +66,31 @@ function addPluginToOpenCodeConfig(configPath: string, format: "json" | "jsonc" 
     compaction.prune = false;
     existing.compaction = compaction;
 
-    writeFileSync(configPath, `${JSON.stringify(existing, null, 2)}\n`);
+    writeFileSync(configPath, `${stringifyJsonc(existing, null, 2)}\n`);
+}
+
+function addPluginToTuiConfig(configPath: string, format: "json" | "jsonc" | "none"): void {
+    ensureDir(dirname(configPath));
+
+    if (format === "none") {
+        writeFileSync(configPath, `${stringifyJsonc({ plugin: [PLUGIN_NAME] }, null, 2)}\n`);
+        return;
+    }
+
+    const existing = readJsonc(configPath);
+    if (!existing) {
+        log.warn(`Could not parse ${configPath} — skipping to avoid data loss`);
+        return;
+    }
+
+    const plugins = (existing.plugin as string[]) ?? [];
+    const hasPlugin = plugins.some((p) => p === PLUGIN_NAME || p.startsWith(`${PLUGIN_NAME}@`));
+    if (!hasPlugin) {
+        plugins.push(PLUGIN_NAME);
+    }
+
+    existing.plugin = plugins;
+    writeFileSync(configPath, `${stringifyJsonc(existing, null, 2)}\n`);
 }
 
 function writeMagicContextConfig(
@@ -127,6 +107,13 @@ function writeMagicContextConfig(
     // Read existing config to preserve user's other settings
     const config: Record<string, unknown> =
         (existsSync(configPath) ? readJsonc(configPath) : null) ?? {};
+
+    // Always set $schema for editor autocomplete/validation
+    if (!config.$schema) {
+        config.$schema =
+            "https://raw.githubusercontent.com/cortexkit/opencode-magic-context/master/assets/magic-context.schema.json";
+    }
+
     if (options.historianModel) {
         const historian = (config.historian as Record<string, unknown>) ?? {};
         historian.model = options.historianModel;
@@ -163,31 +150,8 @@ function writeMagicContextConfig(
         config.cache_ttl = cacheTtl;
     }
 
-    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    writeFileSync(configPath, `${stringifyJsonc(config, null, 2)}\n`);
 }
-function disableOmoHooks(omoConfigPath: string): void {
-    const config = readJsonc(omoConfigPath);
-    if (!config) {
-        log.warn(`Could not parse ${omoConfigPath} — skipping to avoid data loss`);
-        return;
-    }
-    const disabledHooks = (config.disabled_hooks as string[]) ?? [];
-    const hooksToDisable = [
-        "context-window-monitor",
-        "preemptive-compaction",
-        "anthropic-context-window-limit-recovery",
-    ];
-
-    for (const hook of hooksToDisable) {
-        if (!disabledHooks.includes(hook)) {
-            disabledHooks.push(hook);
-        }
-    }
-
-    config.disabled_hooks = disabledHooks;
-    writeFileSync(omoConfigPath, `${JSON.stringify(config, null, 2)}\n`);
-}
-
 // ─── Main Setup Flow ──────────────────────────────────────
 
 export async function runSetup(): Promise<number> {
@@ -227,6 +191,10 @@ export async function runSetup(): Promise<number> {
 
     // ─── Step 3: Detect config paths ────────────────────
     const paths = detectConfigPaths();
+    const hadExistingSetup =
+        paths.opencodeConfigFormat !== "none" ||
+        existsSync(paths.magicContextConfig) ||
+        paths.tuiConfigFormat !== "none";
 
     // ─── Step 4: Add plugin & disable compaction ────────
     addPluginToOpenCodeConfig(paths.opencodeConfig, paths.opencodeConfigFormat);
@@ -250,11 +218,39 @@ export async function runSetup(): Promise<number> {
                 if (shouldRemove) {
                     plugins.splice(dcpIndex, 1);
                     ocConfig.plugin = plugins;
-                    writeFileSync(paths.opencodeConfig, `${JSON.stringify(ocConfig, null, 2)}\n`);
+                    writeFileSync(paths.opencodeConfig, `${stringifyJsonc(ocConfig, null, 2)}\n`);
                     log.success("Removed opencode-dcp from plugin list");
                 } else {
                     log.warn("Skipped — you may experience context management conflicts");
                 }
+            }
+        }
+    }
+
+    if (hadExistingSetup) {
+        const conflicts = detectConflicts(process.cwd());
+        if (conflicts.hasConflict) {
+            log.warn("Found conflicting configuration that can disable Magic Context:");
+            for (const reason of conflicts.reasons) {
+                log.message(`  • ${reason}`);
+            }
+
+            const shouldFixConflicts = await confirm(
+                "Apply automatic conflict fixes to your OpenCode and OMO config files?",
+                true,
+            );
+
+            if (shouldFixConflicts) {
+                const actions = fixConflicts(process.cwd(), conflicts.conflicts);
+                if (actions.length > 0) {
+                    for (const action of actions) {
+                        log.success(action);
+                    }
+                } else {
+                    log.info("No additional conflict changes were needed");
+                }
+            } else {
+                log.warn("Skipped automatic conflict fixes — Magic Context may remain disabled");
             }
         }
     }
@@ -340,9 +336,11 @@ export async function runSetup(): Promise<number> {
         claudeMax,
     });
     log.success(`Config written to ${paths.magicContextConfig}`);
+    addPluginToTuiConfig(paths.tuiConfig, paths.tuiConfigFormat);
+    log.success("TUI sidebar plugin added to tui.json");
 
     // ─── Step 8: Oh-My-OpenCode compatibility ───────────
-    if (paths.omoConfig) {
+    if (paths.omoConfig && !hadExistingSetup) {
         log.warn(`Found oh-my-opencode config: ${paths.omoConfig}`);
         log.message(
             "These hooks may conflict:\n" +
@@ -353,8 +351,18 @@ export async function runSetup(): Promise<number> {
 
         const shouldDisable = await confirm("Disable these hooks in oh-my-opencode?", true);
         if (shouldDisable) {
-            disableOmoHooks(paths.omoConfig);
-            log.success("Hooks disabled in oh-my-opencode config");
+            const actions = fixConflicts(process.cwd(), {
+                compactionAuto: false,
+                compactionPrune: false,
+                dcpPlugin: false,
+                omoPreemptiveCompaction: true,
+                omoContextWindowMonitor: true,
+                omoAnthropicRecovery: true,
+            });
+
+            if (actions.includes("Disabled conflicting oh-my-opencode hooks")) {
+                log.success("Hooks disabled in oh-my-opencode config");
+            }
         } else {
             log.warn("Skipped — you may experience context management conflicts");
         }

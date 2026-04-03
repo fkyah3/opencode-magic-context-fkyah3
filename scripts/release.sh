@@ -102,7 +102,12 @@ cp README.md "$PLUGIN_DIR/README.md"
 echo "  ✓ All checks passed"
 echo ""
 
-# Step 3: Sync version
+# Step 3: Generate JSON Schema
+echo "→ Generating JSON Schema..."
+bun packages/plugin/scripts/build-schema.ts || { echo "Error: Schema generation failed"; exit 1; }
+echo ""
+
+# Step 4: Sync version
 echo "→ Syncing version to $VERSION..."
 node scripts/version-sync.mjs "$VERSION"
 echo ""

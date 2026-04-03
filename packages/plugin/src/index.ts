@@ -7,19 +7,29 @@ import { getMagicContextBuiltinCommands } from "./features/builtin-commands/comm
 import { DREAMER_SYSTEM_PROMPT } from "./features/magic-context/dreamer/task-prompts";
 import { SIDEKICK_SYSTEM_PROMPT } from "./features/magic-context/sidekick/agent";
 import { COMPARTMENT_AGENT_SYSTEM_PROMPT } from "./hooks/magic-context/compartment-prompt";
+import { cleanupConflictWarnings, sendConflictWarning } from "./plugin/conflict-warning-hook";
 import { startDreamScheduleTimer } from "./plugin/dream-timer";
 import { createEventHandler } from "./plugin/event";
 import { createSessionHooks } from "./plugin/hooks/create-session-hooks";
 import { createMessagesTransformHandler } from "./plugin/messages-transform";
 import { createToolRegistry } from "./plugin/tool-registry";
+import { type ConflictResult, detectConflicts } from "./shared/conflict-detector";
+import { log } from "./shared/logger";
 import { getAgentFallbackModels } from "./shared/model-requirements";
-import { isOpenCodeAutoCompactionEnabled } from "./shared/opencode-compaction-detector";
 
 const plugin: Plugin = async (ctx) => {
     const pluginConfig = loadPluginConfig(ctx.directory);
 
-    if (pluginConfig.enabled && isOpenCodeAutoCompactionEnabled(ctx.directory)) {
-        pluginConfig.enabled = false;
+    // Detect conflicts that prevent magic-context from operating correctly
+    let conflictResult: ConflictResult | null = null;
+    if (pluginConfig.enabled) {
+        conflictResult = detectConflicts(ctx.directory);
+        if (conflictResult.hasConflict) {
+            pluginConfig.enabled = false;
+            log(`[magic-context] disabled due to conflicts: ${conflictResult.reasons.join("; ")}`);
+        } else {
+            log("[magic-context] no conflicts detected, plugin enabled");
+        }
     }
 
     const hooks = createSessionHooks({
@@ -42,6 +52,50 @@ const plugin: Plugin = async (ctx) => {
             embeddingConfig: pluginConfig.embedding,
             memoryEnabled: pluginConfig.memory?.enabled === true,
         });
+    }
+
+    // Conflict warning / cleanup for Desktop mode.
+    // TUI handles this via a startup dialog; this covers Desktop where we can't show dialogs.
+    if (conflictResult?.hasConflict) {
+        // Fire-and-forget: send warning to the last active session for this project
+        void sendConflictWarning(
+            ctx.client as unknown as Record<string, unknown>,
+            ctx.directory,
+            conflictResult,
+        );
+    } else if (pluginConfig.enabled) {
+        // No conflicts — clean up any leftover warning messages from previous disabled runs
+        const serverUrl = (ctx as Record<string, unknown>).serverUrl;
+        const serverUrlStr =
+            serverUrl instanceof URL ? serverUrl.toString().replace(/\/$/, "") : undefined;
+        void cleanupConflictWarnings(
+            ctx.client as unknown as Record<string, unknown>,
+            ctx.directory,
+            serverUrlStr,
+        );
+    }
+
+    // Auto-add TUI plugin entry to tui.json if missing.
+    // This runs from the server plugin because the TUI plugin can't load without it.
+    if (pluginConfig.enabled) {
+        try {
+            const { ensureTuiPluginEntry } = await import("./shared/tui-config");
+            const tuiAdded = ensureTuiPluginEntry();
+            if (tuiAdded) {
+                // Notify user via ignored message (same pattern as conflict warnings)
+                const { sendTuiSetupNotification } = await import("./plugin/conflict-warning-hook");
+                const serverUrl = (ctx as Record<string, unknown>).serverUrl;
+                const serverUrlStr =
+                    serverUrl instanceof URL ? serverUrl.toString().replace(/\/$/, "") : undefined;
+                void sendTuiSetupNotification(
+                    ctx.client as unknown as Record<string, unknown>,
+                    ctx.directory,
+                    serverUrlStr,
+                );
+            }
+        } catch {
+            // Best-effort — don't block startup
+        }
     }
 
     return {

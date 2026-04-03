@@ -2,6 +2,28 @@
 
 All settings are flat top-level keys in `magic-context.jsonc`. Create the file in your project root, `.opencode/magic-context.jsonc`, or `~/.config/opencode/magic-context.jsonc` for user-wide defaults. Project config merges on top of user config.
 
+### JSON Schema
+
+Add `$schema` to your config file for autocomplete and validation in VS Code and other editors:
+
+```jsonc
+{
+  "$schema": "https://raw.githubusercontent.com/cortexkit/opencode-magic-context/master/assets/magic-context.schema.json"
+}
+```
+
+The setup wizard adds this automatically.
+
+### Doctor
+
+If something isn't working, run the doctor to auto-detect and fix common issues:
+
+```bash
+bunx @cortexkit/opencode-magic-context doctor
+```
+
+Doctor checks: OpenCode installation, plugin registration, `magic-context.jsonc` existence, conflicts (compaction, DCP, OMO hooks), and TUI sidebar configuration. It auto-fixes what it can.
+
 ---
 
 ## Cache Awareness
@@ -37,10 +59,10 @@ Higher-tier models with longer cache windows benefit from a longer TTL. Setting 
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enabled` | `boolean` | `false` | Master toggle. |
+| `enabled` | `boolean` | `true` | Master toggle. |
 | `ctx_reduce_enabled` | `boolean` | `true` | When `false`, hides `ctx_reduce` tool, disables all nudges/reminders, and strips reduction guidance from prompts. Heuristic cleanup, compartments, memory, and search still work. Useful for testing whether automatic cleanup alone is sufficient. |
 | `cache_ttl` | `string` or `object` | `"5m"` | Time after a response before applying pending ops. String or per-model map. |
-| `protected_tags` | `number` (1–20) | `20` | Last N active tags immune from immediate dropping. |
+| `protected_tags` | `number` (1–100) | `20` | Last N active tags immune from immediate dropping. |
 | `nudge_interval_tokens` | `number` | `10000` | Minimum token growth between rolling nudges. |
 | `execute_threshold_percentage` | `number` (35–80) or `object` | `65` | Context usage that forces queued ops to execute. Capped at 80% max for cache safety. Supports per-model map. |
 | `auto_drop_tool_age` | `number` | `100` | Auto-drop tool outputs older than N tags during execution. |

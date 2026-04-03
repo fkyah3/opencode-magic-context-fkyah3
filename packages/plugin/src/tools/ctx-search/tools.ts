@@ -1,4 +1,5 @@
 import { type ToolDefinition, tool } from "@opencode-ai/plugin";
+import { getLastCompartmentEndMessage } from "../../features/magic-context/compartment-storage";
 import { type UnifiedSearchResult, unifiedSearch } from "../../features/magic-context/search";
 import {
     CTX_SEARCH_DESCRIPTION,
@@ -66,6 +67,10 @@ function createCtxSearchTool(deps: CtxSearchToolDeps): ToolDefinition {
                 return "Error: 'query' is required.";
             }
 
+            // Only search message history up to the last compartment boundary —
+            // anything after that is still in the live context and already visible to the agent.
+            const lastCompartmentEnd = getLastCompartmentEndMessage(deps.db, toolContext.sessionID);
+
             const results = await unifiedSearch(
                 deps.db,
                 toolContext.sessionID,
@@ -76,6 +81,7 @@ function createCtxSearchTool(deps: CtxSearchToolDeps): ToolDefinition {
                     memoryEnabled: deps.memoryEnabled,
                     embeddingEnabled: deps.embeddingEnabled,
                     readMessages: deps.readMessages,
+                    maxMessageOrdinal: lastCompartmentEnd >= 0 ? lastCompartmentEnd : undefined,
                 },
             );
 

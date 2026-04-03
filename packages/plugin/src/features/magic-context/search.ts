@@ -46,6 +46,8 @@ export interface UnifiedSearchOptions {
     readMessages?: (sessionId: string) => RawMessage[];
     embedQuery?: (text: string) => Promise<Float32Array | null>;
     isEmbeddingRuntimeEnabled?: () => boolean;
+    /** Only return message-history hits with ordinal ≤ this value (e.g. last compartment end). -1 or omit to search all. */
+    maxMessageOrdinal?: number;
 }
 
 export interface MemorySearchResult {
@@ -385,6 +387,8 @@ function searchMessages(args: {
     query: string;
     limit: number;
     readMessages: (sessionId: string) => RawMessage[];
+    /** Only return messages with ordinal ≤ this value. Omit or -1 to search all indexed messages. */
+    maxOrdinal?: number;
 }): MessageSearchResult[] {
     ensureMessagesIndexed(args.db, args.sessionId, args.readMessages);
 
@@ -393,9 +397,14 @@ function searchMessages(args: {
         return [];
     }
 
+    // Fetch more rows than needed so post-filter still has enough results
+    const fetchLimit =
+        args.maxOrdinal != null && args.maxOrdinal >= 0 ? args.limit * 3 : args.limit;
     const rows = getMessageSearchStatement(args.db)
-        .all(args.sessionId, sanitizedQuery, args.limit)
+        .all(args.sessionId, sanitizedQuery, fetchLimit)
         .map((row) => row as MessageSearchRow);
+
+    const cutoff = args.maxOrdinal != null && args.maxOrdinal >= 0 ? args.maxOrdinal : null;
 
     return rows
         .map((row, rank) => {
@@ -409,6 +418,11 @@ function searchMessages(args: {
                 return null;
             }
 
+            // Skip messages still in the live context (not yet compartmentalized)
+            if (cutoff !== null && messageOrdinal > cutoff) {
+                return null;
+            }
+
             return {
                 source: "message" as const,
                 content: previewText(row.content),
@@ -418,7 +432,8 @@ function searchMessages(args: {
                 role: row.role,
             };
         })
-        .filter((result): result is MessageSearchResult => result !== null);
+        .filter((result): result is MessageSearchResult => result !== null)
+        .slice(0, args.limit);
 }
 
 function getSourceBoost(result: UnifiedSearchResult): number {
@@ -489,6 +504,7 @@ export async function unifiedSearch(
                 query: trimmedQuery,
                 limit: tierLimit,
                 readMessages: options.readMessages ?? readRawSessionMessages,
+                maxOrdinal: options.maxMessageOrdinal,
             }),
         ),
     ]);

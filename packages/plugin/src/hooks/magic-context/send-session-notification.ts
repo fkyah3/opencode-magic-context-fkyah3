@@ -27,12 +27,69 @@ function hasNotificationSessionClient(client: unknown): client is NotificationCl
     );
 }
 
+/**
+ * Map notification text to a TUI toast variant based on content heuristics.
+ */
+function inferToastVariant(text: string): "success" | "error" | "warning" | "info" {
+    const lower = text.toLowerCase();
+    if (lower.includes("error") || lower.includes("failed") || lower.includes("alert"))
+        return "error";
+    if (lower.includes("warning") || lower.includes("⚠")) return "warning";
+    if (
+        lower.includes("complete") ||
+        lower.includes("success") ||
+        lower.includes("✓") ||
+        lower.includes("finished")
+    )
+        return "success";
+    return "info";
+}
+
+/**
+ * Extract a short title from notification text (first line or first sentence).
+ */
+function extractToastTitle(text: string): string {
+    // Use first markdown heading if present
+    const headingMatch = text.match(/^#+\s+(.+)/m);
+    if (headingMatch) return headingMatch[1].trim();
+    // Use first line if short enough
+    const firstLine = text.split("\n")[0].trim();
+    if (firstLine.length <= 80) return firstLine;
+    return "Magic Context";
+}
+
 export async function sendIgnoredMessage(
     client: unknown,
     sessionId: string,
     text: string,
     params: NotificationParams,
 ): Promise<void> {
+    // In TUI mode, show as toast instead of ignored message
+    const isTui = (process.env.OPENCODE_CLIENT ?? "cli") === "cli";
+    if (isTui) {
+        try {
+            const c = client as Record<string, unknown>;
+            const tui = c?.tui as Record<string, unknown> | undefined;
+            if (typeof tui?.showToast === "function") {
+                // Intentional: call via property access to preserve `this` binding on the SDK client.
+                // The tui object is an SDK-generated client where methods live on the prototype.
+                const tuiClient = tui as Record<string, (...args: unknown[]) => Promise<unknown>>;
+                await tuiClient
+                    .showToast({
+                        body: {
+                            title: extractToastTitle(text),
+                            message: text.length > 200 ? `${text.slice(0, 200)}…` : text,
+                            variant: inferToastVariant(text),
+                            duration: 5000,
+                        },
+                    })
+                    .catch(() => {});
+                return;
+            }
+        } catch {
+            // Fall through to ignored message
+        }
+    }
     const agent = params.agent || undefined;
     const variant = params.variant || undefined;
     const model =
