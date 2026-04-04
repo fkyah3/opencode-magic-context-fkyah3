@@ -39,7 +39,7 @@ Your agent should never stop working to manage its own context. Magic Context is
 
 **5.** TUI sidebar with live context breakdown, token usage, historian status, and memory counts — right inside the terminal.
 
-### 🧪 Experimental
+### 🧪 New Experimental Features
 
 **Compaction Markers** — after historian compresses older messages, Magic Context injects a boundary into OpenCode's message table. OpenCode's built-in message loader stops at the boundary, so the transform processes only the live tail instead of the full session history. Dramatically reduces per-turn overhead on long sessions. Enable with `experimental.compaction_markers: true`.
 
