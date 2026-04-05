@@ -31,6 +31,17 @@ export function parseScheduleWindow(
     return { startMinutes, endMinutes };
 }
 
+/**
+ * Check if a dream timestamp falls within today's schedule window.
+ * Uses a simple heuristic: if the dream ran less than 12 hours ago,
+ * it's considered "from the current window" and the project should not be re-enqueued.
+ * This prevents the dreamer's own memory updates from triggering re-enqueuing.
+ */
+function isDreamFromCurrentWindow(lastDreamAtMs: number, now: Date): boolean {
+    const twelveHoursMs = 12 * 60 * 60 * 1000;
+    return now.getTime() - lastDreamAtMs < twelveHoursMs;
+}
+
 /** Check if the current time is inside the schedule window. Handles overnight windows (e.g. 23:00-05:00). */
 export function isInScheduleWindow(schedule: string, now: Date = new Date()): boolean {
     const window = parseScheduleWindow(schedule);
@@ -60,11 +71,19 @@ export function findProjectsNeedingDream(db: Database): string[] {
         .all();
 
     const projects: string[] = [];
+    const now = new Date();
     for (const row of projectRows) {
         const lastDreamAtStr = getDreamState(db, `last_dream_at:${row.project_path}`);
         // Fall back to global key for migration from old single-key format
         const fallbackStr = !lastDreamAtStr ? getDreamState(db, "last_dream_at") : null;
         const lastDreamAt = Number(lastDreamAtStr ?? fallbackStr ?? "0") || 0;
+
+        // Skip if a dream already ran in the current schedule window.
+        // This prevents re-enqueuing because dreamer's own memory updates
+        // (consolidate, verify, improve, archive) set updated_at > last_dream_at.
+        if (lastDreamAt > 0 && isDreamFromCurrentWindow(lastDreamAt, now)) {
+            continue;
+        }
 
         const updatedMemories = db
             .query<{ cnt: number }, [string, number]>(
