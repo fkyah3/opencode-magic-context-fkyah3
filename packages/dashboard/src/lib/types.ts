@@ -73,9 +73,15 @@ export interface Compartment {
   sequence: number;
   start_message: number;
   end_message: number;
+  start_message_id?: string;
+  end_message_id?: string;
   title: string;
   content: string;
   created_at: number;
+  /** Resolved from OpenCode DB — epoch ms */
+  start_time?: number;
+  /** Resolved from OpenCode DB — epoch ms */
+  end_time?: number;
 }
 
 export interface SessionFact {

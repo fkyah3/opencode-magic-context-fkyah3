@@ -123,6 +123,63 @@ pub fn get_smart_notes(
 }
 
 #[tauri::command]
+pub fn update_session_fact(
+    state: State<'_, AppState>,
+    fact_id: i64,
+    content: String,
+) -> Result<(), String> {
+    let path = state.get_db_path()?;
+    let conn = db::open_readwrite(&path).map_err(|e| e.to_string())?;
+    db::update_session_fact(&conn, fact_id, &content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_session_fact(
+    state: State<'_, AppState>,
+    fact_id: i64,
+) -> Result<(), String> {
+    let path = state.get_db_path()?;
+    let conn = db::open_readwrite(&path).map_err(|e| e.to_string())?;
+    db::delete_session_fact(&conn, fact_id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_note(
+    state: State<'_, AppState>,
+    note_id: i64,
+    content: String,
+) -> Result<(), String> {
+    let path = state.get_db_path()?;
+    let conn = db::open_readwrite(&path).map_err(|e| e.to_string())?;
+    db::update_note(&conn, note_id, &content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_note(
+    state: State<'_, AppState>,
+    note_id: i64,
+) -> Result<(), String> {
+    let path = state.get_db_path()?;
+    let conn = db::open_readwrite(&path).map_err(|e| e.to_string())?;
+    db::delete_note(&conn, note_id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn dismiss_note(
+    state: State<'_, AppState>,
+    note_id: i64,
+) -> Result<(), String> {
+    let path = state.get_db_path()?;
+    let conn = db::open_readwrite(&path).map_err(|e| e.to_string())?;
+    db::dismiss_note(&conn, note_id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_session_meta(
     state: State<'_, AppState>,
     session_id: String,

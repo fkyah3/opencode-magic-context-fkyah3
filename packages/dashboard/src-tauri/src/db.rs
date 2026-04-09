@@ -142,9 +142,15 @@ pub struct Compartment {
     pub sequence: i64,
     pub start_message: i64,
     pub end_message: i64,
+    pub start_message_id: Option<String>,
+    pub end_message_id: Option<String>,
     pub title: String,
     pub content: String,
     pub created_at: i64,
+    /// Resolved from OpenCode DB using start_message_id
+    pub start_time: Option<i64>,
+    /// Resolved from OpenCode DB using end_message_id
+    pub end_time: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -1392,22 +1398,55 @@ pub fn get_compartments(
     session_id: &str,
 ) -> Result<Vec<Compartment>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, session_id, sequence, start_message, end_message, title, content, created_at
+        "SELECT id, session_id, sequence, start_message, end_message, start_message_id, end_message_id, title, content, created_at
          FROM compartments WHERE session_id = ?1 ORDER BY sequence DESC",
     )?;
-    let rows = stmt.query_map(rusqlite::params![session_id], |row| {
-        Ok(Compartment {
-            id: row.get(0)?,
-            session_id: row.get(1)?,
-            sequence: row.get(2)?,
-            start_message: row.get(3)?,
-            end_message: row.get(4)?,
-            title: row.get(5)?,
-            content: row.get(6)?,
-            created_at: row.get(7)?,
-        })
-    })?;
-    rows.collect()
+    let mut compartments: Vec<Compartment> = stmt
+        .query_map(rusqlite::params![session_id], |row| {
+            Ok(Compartment {
+                id: row.get(0)?,
+                session_id: row.get(1)?,
+                sequence: row.get(2)?,
+                start_message: row.get(3)?,
+                end_message: row.get(4)?,
+                start_message_id: row.get(5)?,
+                end_message_id: row.get(6)?,
+                title: row.get(7)?,
+                content: row.get(8)?,
+                created_at: row.get(9)?,
+                start_time: None,
+                end_time: None,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Resolve message timestamps from OpenCode DB
+    if let Some(opencode_db_path) = resolve_opencode_db_path() {
+        if let Ok(oc_conn) = open_readonly(&opencode_db_path) {
+            for comp in compartments.iter_mut() {
+                if let Some(ref start_id) = comp.start_message_id {
+                    if let Ok(ts) = oc_conn.query_row(
+                        "SELECT time_created FROM message WHERE id = ?1",
+                        rusqlite::params![start_id],
+                        |row| row.get::<_, Option<i64>>(0),
+                    ) {
+                        comp.start_time = ts;
+                    }
+                }
+                if let Some(ref end_id) = comp.end_message_id {
+                    if let Ok(ts) = oc_conn.query_row(
+                        "SELECT time_created FROM message WHERE id = ?1",
+                        rusqlite::params![end_id],
+                        |row| row.get::<_, Option<i64>>(0),
+                    ) {
+                        comp.end_time = ts;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(compartments)
 }
 
 pub fn get_session_facts(
@@ -1458,6 +1497,52 @@ pub fn get_session_notes(
         })
     })?;
     rows.collect()
+}
+
+pub fn update_session_fact(
+    conn: &Connection,
+    fact_id: i64,
+    content: &str,
+) -> Result<usize, rusqlite::Error> {
+    conn.execute(
+        "UPDATE session_facts SET content = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![content, chrono::Utc::now().timestamp_millis(), fact_id],
+    )
+}
+
+pub fn delete_session_fact(
+    conn: &Connection,
+    fact_id: i64,
+) -> Result<usize, rusqlite::Error> {
+    conn.execute("DELETE FROM session_facts WHERE id = ?1", rusqlite::params![fact_id])
+}
+
+pub fn update_note(
+    conn: &Connection,
+    note_id: i64,
+    content: &str,
+) -> Result<usize, rusqlite::Error> {
+    conn.execute(
+        "UPDATE notes SET content = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![content, chrono::Utc::now().timestamp_millis(), note_id],
+    )
+}
+
+pub fn delete_note(
+    conn: &Connection,
+    note_id: i64,
+) -> Result<usize, rusqlite::Error> {
+    conn.execute("DELETE FROM notes WHERE id = ?1", rusqlite::params![note_id])
+}
+
+pub fn dismiss_note(
+    conn: &Connection,
+    note_id: i64,
+) -> Result<usize, rusqlite::Error> {
+    conn.execute(
+        "UPDATE notes SET status = 'dismissed', updated_at = ?1 WHERE id = ?2",
+        rusqlite::params![chrono::Utc::now().timestamp_millis(), note_id],
+    )
 }
 
 pub fn get_smart_notes(

@@ -40,6 +40,11 @@ fn main() {
             commands::get_session_facts,
             commands::get_session_notes,
             commands::get_smart_notes,
+            commands::update_session_fact,
+            commands::delete_session_fact,
+            commands::update_note,
+            commands::delete_note,
+            commands::dismiss_note,
             commands::get_session_meta,
             commands::get_context_token_breakdown,
             // Dreamer

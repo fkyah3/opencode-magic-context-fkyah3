@@ -890,23 +890,25 @@ function ConfigForm(props: {
                   {/* Left column: Compaction Markers + User Memories */}
                   <div class="config-card-content">
                     <div class="config-field">
-                      <label class="field-label">
-                        <span>Compaction Markers</span>
-                        <span class="field-hint">Inject boundary into OpenCode's DB so transform only processes the live tail</span>
-                      </label>
-                      <label class="toggle">
+                      <div class="config-field-header">
+                        <label class="config-field-label">Compaction Markers</label>
+                        <span class="config-field-key">experimental.compaction_markers</span>
+                      </div>
+                      <span class="config-field-desc">Inject boundary into OpenCode's DB so transform only processes the live tail</span>
+                      <label class="toggle-switch">
                         <input type="checkbox" checked={compactionMarkers()} onChange={(e) => updateExp("compaction_markers", e.currentTarget.checked)} />
                         <span class="toggle-slider" />
                         <span class="toggle-label">{compactionMarkers() ? "Enabled" : "Disabled"}</span>
                       </label>
                     </div>
 
-                    <div class="config-field" style={{ "margin-top": "16px" }}>
-                      <label class="field-label">
-                        <span>User Memories</span>
-                        <span class="field-hint">Extract behavioral observations from historian runs, promote recurring patterns to stable user memories. Requires dreamer.</span>
-                      </label>
-                      <label class="toggle">
+                    <div class="config-field">
+                      <div class="config-field-header">
+                        <label class="config-field-label">User Memories</label>
+                        <span class="config-field-key">experimental.user_memories.enabled</span>
+                      </div>
+                      <span class="config-field-desc">Extract behavioral observations from historian runs, promote recurring patterns to stable user memories. Requires dreamer.</span>
+                      <label class="toggle-switch">
                         <input type="checkbox" checked={userMemEnabled()} onChange={(e) => updateExp("user_memories.enabled", e.currentTarget.checked)} />
                         <span class="toggle-slider" />
                         <span class="toggle-label">{userMemEnabled() ? "Enabled" : "Disabled"}</span>
@@ -914,12 +916,13 @@ function ConfigForm(props: {
                     </div>
 
                     <Show when={userMemEnabled()}>
-                      <div class="config-field" style={{ "margin-top": "8px", "padding-left": "12px" }}>
-                        <label class="field-label">
-                          <span>Promotion Threshold</span>
-                          <span class="field-hint">Minimum candidate observations before dreamer promotes to stable (2–20)</span>
-                        </label>
-                        <input type="number" class="field-input" min={2} max={20} value={userMemThreshold()} onInput={(e) => updateExp("user_memories.promotion_threshold", Number(e.currentTarget.value))} style={{ width: "80px" }} />
+                      <div class="config-field">
+                        <div class="config-field-header">
+                          <label class="config-field-label">Promotion Threshold</label>
+                          <span class="config-field-key">experimental.user_memories.promotion_threshold</span>
+                        </div>
+                        <span class="config-field-desc">Minimum candidate observations before dreamer promotes to stable (2–20)</span>
+                        <input class="config-input" type="number" min={2} max={20} value={userMemThreshold()} onInput={(e) => updateExp("user_memories.promotion_threshold", Number(e.currentTarget.value))} />
                       </div>
                     </Show>
                   </div>
@@ -927,11 +930,12 @@ function ConfigForm(props: {
                   {/* Right column: Key File Pinning */}
                   <div class="config-card-content">
                     <div class="config-field">
-                      <label class="field-label">
-                        <span>Key File Pinning</span>
-                        <span class="field-hint">Pin frequently-read files into the system prompt so the agent doesn't need to re-read them after drops. Requires dreamer.</span>
-                      </label>
-                      <label class="toggle">
+                      <div class="config-field-header">
+                        <label class="config-field-label">Key File Pinning</label>
+                        <span class="config-field-key">experimental.pin_key_files.enabled</span>
+                      </div>
+                      <span class="config-field-desc">Pin frequently-read files into the system prompt so the agent doesn't need to re-read them after drops. Requires dreamer.</span>
+                      <label class="toggle-switch">
                         <input type="checkbox" checked={pinEnabled()} onChange={(e) => updateExp("pin_key_files.enabled", e.currentTarget.checked)} />
                         <span class="toggle-slider" />
                         <span class="toggle-label">{pinEnabled() ? "Enabled" : "Disabled"}</span>
@@ -939,20 +943,22 @@ function ConfigForm(props: {
                     </div>
 
                     <Show when={pinEnabled()}>
-                      <div class="config-field" style={{ "margin-top": "8px", "padding-left": "12px" }}>
-                        <label class="field-label">
-                          <span>Token Budget</span>
-                          <span class="field-hint">Total tokens for all pinned key files (2,000–30,000)</span>
-                        </label>
-                        <input type="number" class="field-input" min={2000} max={30000} step={1000} value={pinBudget()} onInput={(e) => updateExp("pin_key_files.token_budget", Number(e.currentTarget.value))} style={{ width: "100px" }} />
+                      <div class="config-field">
+                        <div class="config-field-header">
+                          <label class="config-field-label">Token Budget</label>
+                          <span class="config-field-key">experimental.pin_key_files.token_budget</span>
+                        </div>
+                        <span class="config-field-desc">Total tokens for all pinned key files (2,000–30,000)</span>
+                        <input class="config-input" type="number" min={2000} max={30000} step={1000} value={pinBudget()} onInput={(e) => updateExp("pin_key_files.token_budget", Number(e.currentTarget.value))} />
                       </div>
 
-                      <div class="config-field" style={{ "margin-top": "8px", "padding-left": "12px" }}>
-                        <label class="field-label">
-                          <span>Min Reads</span>
-                          <span class="field-hint">Minimum full-read count before a file is eligible for pinning (2–20)</span>
-                        </label>
-                        <input type="number" class="field-input" min={2} max={20} value={pinMinReads()} onInput={(e) => updateExp("pin_key_files.min_reads", Number(e.currentTarget.value))} style={{ width: "80px" }} />
+                      <div class="config-field">
+                        <div class="config-field-header">
+                          <label class="config-field-label">Min Reads</label>
+                          <span class="config-field-key">experimental.pin_key_files.min_reads</span>
+                        </div>
+                        <span class="config-field-desc">Minimum full-read count before a file is eligible for pinning (2–20)</span>
+                        <input class="config-input" type="number" min={2} max={20} value={pinMinReads()} onInput={(e) => updateExp("pin_key_files.min_reads", Number(e.currentTarget.value))} />
                       </div>
                     </Show>
                   </div>

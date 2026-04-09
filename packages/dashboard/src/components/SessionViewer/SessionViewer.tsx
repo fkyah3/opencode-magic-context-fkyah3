@@ -1,4 +1,5 @@
 import { createSignal, createResource, createMemo, For, Index, Show } from "solid-js";
+import { ask } from "@tauri-apps/plugin-dialog";
 import type { SessionSummary, Compartment, SessionFact, Note, SessionMetaRow, ContextTokenBreakdown } from "../../lib/types";
 import {
   getProjects,
@@ -9,7 +10,13 @@ import {
   getSmartNotes,
   getSessionMeta,
   getContextTokenBreakdown,
+  updateSessionFact,
+  deleteSessionFact,
+  updateNote,
+  deleteNote,
+  dismissNote,
   formatRelativeTime,
+  formatDateTime,
   truncate,
 } from "../../lib/api";
 import FilterSelect from "../shared/FilterSelect";
@@ -21,6 +28,10 @@ export default function SessionViewer() {
   const [searchQuery, setSearchQuery] = createSignal("");
   const [projectFilter, setProjectFilter] = createSignal("");
   const [showSubagents, setShowSubagents] = createSignal(false);
+  const [editingFact, setEditingFact] = createSignal<number | null>(null);
+  const [editFactContent, setEditFactContent] = createSignal("");
+  const [editingNote, setEditingNote] = createSignal<number | null>(null);
+  const [editNoteContent, setEditNoteContent] = createSignal("");
 
   const [projects] = createResource(getProjects);
   const [sessions] = createResource(getSessions);
@@ -55,17 +66,17 @@ export default function SessionViewer() {
     return getCompartments(sid);
   });
 
-  const [facts] = createResource(selectedSession, async (sid) => {
+  const [facts, { refetch: refetchFacts }] = createResource(selectedSession, async (sid) => {
     if (!sid) return [];
     return getSessionFacts(sid);
   });
 
-  const [notes] = createResource(selectedSession, async (sid) => {
+  const [notes, { refetch: refetchNotes }] = createResource(selectedSession, async (sid) => {
     if (!sid) return [];
     return getSessionNotes(sid);
   });
 
-  const [smartNotes] = createResource(selectedSession, async (sid) => {
+  const [smartNotes, { refetch: refetchSmartNotes }] = createResource(selectedSession, async (sid) => {
     if (!sid) return [];
     // Get project identity from the selected session
     const session = sessions()?.find(s => s.session_id === sid);
@@ -268,6 +279,11 @@ export default function SessionViewer() {
                               #{comp.sequence}
                             </span>
                             Messages {comp.start_message}–{comp.end_message}
+                            {comp.start_time && comp.end_time && (
+                              <span style={{ color: "var(--text-muted)", "font-size": "11px", "margin-left": "8px" }}>
+                                {formatDateTime(comp.start_time)} → {formatDateTime(comp.end_time)}
+                              </span>
+                            )}
                           </div>
                           <span style={{ "font-size": "11px", color: "var(--text-muted)" }}>
                             {expandedCompartment() === comp.id ? "▲" : "▼"}
@@ -331,9 +347,23 @@ export default function SessionViewer() {
                       <For each={categoryFacts}>
                         {(fact) => (
                           <div class="card">
-                            <div style={{ "font-size": "12px", "white-space": "pre-wrap", "line-height": "1.6" }}>
-                              {fact.content}
-                            </div>
+                            <Show when={editingFact() === fact.id} fallback={
+                              <>
+                                <div style={{ "font-size": "12px", "white-space": "pre-wrap", "line-height": "1.6" }}>
+                                  {fact.content}
+                                </div>
+                                <div style={{ display: "flex", gap: "6px", "margin-top": "6px", "justify-content": "flex-end" }}>
+                                  <button class="btn sm" onClick={(e) => { e.stopPropagation(); setEditingFact(fact.id); setEditFactContent(fact.content); }}>Edit</button>
+                                  <button class="btn sm" style={{ color: "var(--red)" }} onClick={async (e) => { e.stopPropagation(); if (!await ask("Delete this fact? This cannot be undone.", { title: "Confirm Delete", kind: "warning" })) return; try { await deleteSessionFact(fact.id); refetchFacts(); } catch (err) { console.error(err); } }}>Delete</button>
+                                </div>
+                              </>
+                            }>
+                              <textarea class="code-editor" style={{ "min-height": "80px", "font-size": "12px" }} value={editFactContent()} onInput={(e) => setEditFactContent(e.currentTarget.value)} />
+                              <div style={{ display: "flex", gap: "6px", "margin-top": "6px", "justify-content": "flex-end" }}>
+                                <button class="btn primary sm" onClick={async () => { try { await updateSessionFact(fact.id, editFactContent()); setEditingFact(null); refetchFacts(); } catch (err) { console.error(err); } }}>Save</button>
+                                <button class="btn sm" onClick={() => setEditingFact(null)}>Cancel</button>
+                              </div>
+                            </Show>
                           </div>
                         )}
                       </For>
@@ -356,12 +386,26 @@ export default function SessionViewer() {
                   <For each={notes() ?? []}>
                     {(note) => (
                       <div class="card">
-                        <div style={{ "font-size": "12px", "white-space": "pre-wrap", "line-height": "1.6" }}>
-                          {note.content}
-                        </div>
-                        <div class="card-meta" style={{ "margin-top": "6px" }}>
-                          {formatRelativeTime(note.created_at)}
-                        </div>
+                        <Show when={editingNote() === note.id} fallback={
+                          <>
+                            <div style={{ "font-size": "12px", "white-space": "pre-wrap", "line-height": "1.6" }}>
+                              {note.content}
+                            </div>
+                            <div style={{ display: "flex", "justify-content": "space-between", "align-items": "center", "margin-top": "6px" }}>
+                              <div class="card-meta">{formatRelativeTime(note.created_at)}</div>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button class="btn sm" onClick={(e) => { e.stopPropagation(); setEditingNote(note.id); setEditNoteContent(note.content); }}>Edit</button>
+                                <button class="btn sm" style={{ color: "var(--red)" }} onClick={async (e) => { e.stopPropagation(); if (!await ask("Delete this note? This cannot be undone.", { title: "Confirm Delete", kind: "warning" })) return; try { await deleteNote(note.id); refetchNotes(); } catch (err) { console.error(err); } }}>Delete</button>
+                              </div>
+                            </div>
+                          </>
+                        }>
+                          <textarea class="code-editor" style={{ "min-height": "80px", "font-size": "12px" }} value={editNoteContent()} onInput={(e) => setEditNoteContent(e.currentTarget.value)} />
+                          <div style={{ display: "flex", gap: "6px", "margin-top": "6px", "justify-content": "flex-end" }}>
+                            <button class="btn primary sm" onClick={async () => { try { await updateNote(note.id, editNoteContent()); setEditingNote(null); refetchNotes(); } catch (err) { console.error(err); } }}>Save</button>
+                            <button class="btn sm" onClick={() => setEditingNote(null)}>Cancel</button>
+                          </div>
+                        </Show>
                       </div>
                     )}
                   </For>
@@ -383,23 +427,29 @@ export default function SessionViewer() {
                         <div style={{ "margin-top": "8px", "font-size": "11px", color: "var(--text-secondary)" }}>
                           <span style={{ "font-weight": 500 }}>Trigger:</span> {smartNote.surface_condition}
                         </div>
-                        <div style={{ "margin-top": "6px", display: "flex", "align-items": "center", gap: "8px" }}>
-                          <span
-                            class="pill"
-                            style={{
-                              "font-size": "10px",
-                              "text-transform": "uppercase",
-                              "background": smartNote.status === "ready" ? "var(--success)" : "var(--text-muted)",
-                              "color": smartNote.status === "ready" ? "#fff" : "var(--text-primary)",
-                            }}
-                          >
-                            {smartNote.status}
-                          </span>
-                          <Show when={smartNote.status === "ready" && smartNote.ready_reason}>
-                            <span style={{ "font-size": "11px", color: "var(--text-secondary)", "font-style": "italic" }}>
-                              {smartNote.ready_reason}
+                        <div style={{ "margin-top": "6px", display: "flex", "align-items": "center", "justify-content": "space-between" }}>
+                          <div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
+                            <span
+                              class="pill"
+                              style={{
+                                "font-size": "10px",
+                                "text-transform": "uppercase",
+                                "background": smartNote.status === "ready" ? "var(--success)" : "var(--text-muted)",
+                                "color": smartNote.status === "ready" ? "#fff" : "var(--text-primary)",
+                              }}
+                            >
+                              {smartNote.status}
                             </span>
-                          </Show>
+                            <Show when={smartNote.status === "ready" && smartNote.ready_reason}>
+                              <span style={{ "font-size": "11px", color: "var(--text-secondary)", "font-style": "italic" }}>
+                                {smartNote.ready_reason}
+                              </span>
+                            </Show>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <button class="btn sm" style={{ color: "var(--text-muted)" }} onClick={async (e) => { e.stopPropagation(); if (!await ask("Dismiss this smart note?", { title: "Confirm Dismiss", kind: "info" })) return; try { await dismissNote(smartNote.id); refetchSmartNotes(); } catch (err) { console.error(err); } }}>Dismiss</button>
+                            <button class="btn sm" style={{ color: "var(--red)" }} onClick={async (e) => { e.stopPropagation(); if (!await ask("Delete this smart note? This cannot be undone.", { title: "Confirm Delete", kind: "warning" })) return; try { await deleteNote(smartNote.id); refetchSmartNotes(); } catch (err) { console.error(err); } }}>Delete</button>
+                          </div>
                         </div>
                       </div>
                     )}

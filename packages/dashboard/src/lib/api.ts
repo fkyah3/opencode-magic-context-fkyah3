@@ -96,6 +96,26 @@ export async function getSmartNotes(
   return invoke("get_smart_notes", { projectPath });
 }
 
+export async function updateSessionFact(factId: number, content: string): Promise<void> {
+  return invoke("update_session_fact", { factId, content });
+}
+
+export async function deleteSessionFact(factId: number): Promise<void> {
+  return invoke("delete_session_fact", { factId });
+}
+
+export async function updateNote(noteId: number, content: string): Promise<void> {
+  return invoke("update_note", { noteId, content });
+}
+
+export async function deleteNote(noteId: number): Promise<void> {
+  return invoke("delete_note", { noteId });
+}
+
+export async function dismissNote(noteId: number): Promise<void> {
+  return invoke("dismiss_note", { noteId });
+}
+
 export async function getSessionMeta(
   sessionId: string
 ): Promise<SessionMetaRow | null> {
