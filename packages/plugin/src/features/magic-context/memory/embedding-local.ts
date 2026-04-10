@@ -42,6 +42,26 @@ async function withQuietConsole<T>(fn: () => Promise<T>): Promise<T> {
     }
 }
 
+/**
+ * Recognizes transient ONNX/transformers load failures that should be retried
+ * rather than surfaced to the user. Seen in live logs when multiple plugin
+ * processes (Desktop sidecar + TUI + dashboard) initialize the embedding
+ * pipeline within the same window. The on-disk model file is intact; the
+ * failure mode is ephemeral and resolves on retry.
+ */
+function isTransientLoadError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    if (!message) return false;
+    const lower = message.toLowerCase();
+    return (
+        lower.includes("protobuf parsing failed") ||
+        lower.includes("unable to get model file path or buffer") ||
+        lower.includes("ebusy") ||
+        lower.includes("resource busy") ||
+        lower.includes("resource temporarily unavailable")
+    );
+}
+
 function isArrayLikeNumber(value: unknown): value is ArrayLike<number> {
     if (typeof value !== "object" || value === null || !("length" in value)) {
         return false;
@@ -141,13 +161,45 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
                     env.logLevel = LogLevel.ERROR;
                 }
                 const createPipeline = transformersModule.pipeline as CreateEmbeddingPipeline;
-                this.pipeline = await withQuietConsole(() =>
-                    createPipeline("feature-extraction", this.model, {
-                        quantized: true,
-                        dtype: "fp32",
-                    }),
-                );
-                log(`[magic-context] embedding model loaded: ${this.model}`);
+
+                // Retry loop absorbs transient failures seen when multiple plugin
+                // processes initialize the ONNX session around the same time:
+                //   - "Protobuf parsing failed" (onnxruntime-node race on mmap/page cache)
+                //   - "Unable to get model file path or buffer" (download still in progress)
+                //   - EBUSY / file lock contention
+                // Recovery happens within a few hundred ms. The file on disk is fine;
+                // we verified this on live logs with matching SHA256 vs HuggingFace.
+                const MAX_ATTEMPTS = 3;
+                let lastError: unknown;
+                for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                    try {
+                        this.pipeline = await withQuietConsole(() =>
+                            createPipeline("feature-extraction", this.model, {
+                                quantized: true,
+                                dtype: "fp32",
+                            }),
+                        );
+                        lastError = undefined;
+                        break;
+                    } catch (error) {
+                        lastError = error;
+                        if (!isTransientLoadError(error) || attempt === MAX_ATTEMPTS) {
+                            break;
+                        }
+                        // Jittered backoff: 300ms + random 0-200ms, grows by attempt.
+                        const delayMs = 300 * attempt + Math.floor(Math.random() * 200);
+                        log(
+                            `[magic-context] embedding model load attempt ${attempt}/${MAX_ATTEMPTS} failed transiently, retrying in ${delayMs}ms`,
+                        );
+                        await new Promise((resolve) => setTimeout(resolve, delayMs));
+                    }
+                }
+
+                if (this.pipeline) {
+                    log(`[magic-context] embedding model loaded: ${this.model}`);
+                } else {
+                    throw lastError ?? new Error("unknown embedding load failure");
+                }
             } catch (error) {
                 log("[magic-context] embedding model failed to load:", error);
                 this.pipeline = null;
