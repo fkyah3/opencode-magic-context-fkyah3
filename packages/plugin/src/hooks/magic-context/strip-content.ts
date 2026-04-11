@@ -279,7 +279,7 @@ function findMaxTag(messageTagNumbers: Map<MessageLike, number>): number {
     return max;
 }
 
-const CLEARED_REASONING_TYPES = new Set(["thinking", "reasoning", "redacted_thinking"]);
+const CLEARED_REASONING_TYPES = new Set(["thinking", "reasoning"]);
 
 export function stripClearedReasoning(messages: MessageLike[]): number {
     let stripped = 0;

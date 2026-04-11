@@ -193,6 +193,26 @@ describe("strip-content", () => {
                 });
             });
         });
+
+        describe("#given assistant messages with redacted thinking parts", () => {
+            describe("#when stripping cleared reasoning", () => {
+                it("#then preserves redacted thinking blocks unchanged", () => {
+                    const redactedPart = {
+                        type: "redacted_thinking",
+                        data: "opaque-provider-payload",
+                    };
+                    const textPart = { type: "text", text: "visible response" };
+                    const msg = message("m-1", "assistant", [redactedPart, textPart]);
+
+                    const stripped = stripClearedReasoning([msg]);
+
+                    expect(stripped).toBe(0);
+                    expect(msg.parts).toHaveLength(2);
+                    expect(msg.parts[0]).toBe(redactedPart);
+                    expect(msg.parts[1]).toBe(textPart);
+                });
+            });
+        });
     });
 
     describe("stripInlineThinking", () => {
