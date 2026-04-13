@@ -65,7 +65,7 @@ echo ""
 # Step 1: Dry run preview
 if [[ "$DRY" == "--dry" ]]; then
   echo "→ Version sync (dry run):"
-  node scripts/version-sync.mjs "$VERSION" --dry-run
+  bun scripts/version-sync.mjs "$VERSION" --dry-run
   echo ""
   echo "[DRY RUN] Would commit, tag $TAG, and push to origin."
   exit 0
@@ -109,7 +109,7 @@ echo ""
 
 # Step 4: Sync version
 echo "→ Syncing version to $VERSION..."
-node scripts/version-sync.mjs "$VERSION"
+bun scripts/version-sync.mjs "$VERSION"
 echo ""
 
 # Step 4: Commit (skip if versions were already at target)
