@@ -376,16 +376,12 @@ export async function runDoctor(
                     tuiEntry !== PLUGIN_ENTRY_WITH_VERSION &&
                     /^@cortexkit\/opencode-magic-context@\d/.test(tuiEntry);
                 if (tuiPinned && !options.force) {
-                    log.warn(
-                        `TUI plugin pinned to ${tuiEntry} — use 'doctor --force' to upgrade`,
-                    );
+                    log.warn(`TUI plugin pinned to ${tuiEntry} — use 'doctor --force' to upgrade`);
                 } else if (tuiPinned && options.force) {
                     tuiPlugins[tuiIdx] = PLUGIN_ENTRY_WITH_VERSION;
                     tuiConfig.plugin = tuiPlugins;
                     writeFileSync(paths.tuiConfig, `${stringify(tuiConfig, null, 2)}\n`);
-                    log.success(
-                        `Upgraded TUI plugin: ${tuiEntry} → ${PLUGIN_ENTRY_WITH_VERSION}`,
-                    );
+                    log.success(`Upgraded TUI plugin: ${tuiEntry} → ${PLUGIN_ENTRY_WITH_VERSION}`);
                     fixed++;
                 } else {
                     log.success("TUI sidebar plugin configured");

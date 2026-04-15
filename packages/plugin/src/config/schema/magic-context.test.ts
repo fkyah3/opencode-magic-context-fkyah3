@@ -66,7 +66,6 @@ describe("MagicContextConfigSchema", () => {
                 },
                 compaction_markers: true,
                 experimental: {
-                    
                     user_memories: {
                         enabled: false,
                         promotion_threshold: 3,
