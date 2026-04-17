@@ -49,11 +49,27 @@ export interface MockServerOptions {
     port?: number;
 }
 
+/**
+ * Route predicate — receives the captured request body and returns a MockResponse
+ * to use for THIS request, or null to skip to the next matcher / default.
+ *
+ * Matchers run in insertion order. First match wins. If all matchers return null,
+ * the main queue is consulted, then defaultResponse.
+ *
+ * Typical use: route historian requests (by system-prompt keyword) to a slow/custom
+ * response while leaving the main agent on the default fast response.
+ */
+export type RequestMatcher = (
+    body: Record<string, unknown>,
+    headers: Record<string, string>,
+) => MockResponse | null;
+
 export class MockProvider {
     private server: ReturnType<typeof Bun.serve> | null = null;
     private responses: MockResponse[] = [];
     private captured: CapturedRequest[] = [];
     private defaultResponse: MockResponse | null = null;
+    private matchers: RequestMatcher[] = [];
 
     async start(options: MockServerOptions = {}): Promise<{ port: number; baseURL: string }> {
         const port = options.port ?? 0; // 0 = pick any available port
@@ -88,6 +104,14 @@ export class MockProvider {
         this.responses.push(response);
     }
 
+    /**
+     * Register a request matcher. Matchers run in order; first non-null return
+     * wins. If none match, the main queue and defaultResponse are consulted.
+     */
+    addMatcher(matcher: RequestMatcher): void {
+        this.matchers.push(matcher);
+    }
+
     /** All captured requests, in order. */
     requests(): CapturedRequest[] {
         return [...this.captured];
@@ -98,11 +122,12 @@ export class MockProvider {
         return this.captured[this.captured.length - 1] ?? null;
     }
 
-    /** Clear both the response queue and captured request log. */
+    /** Clear queue, captured requests, matchers, and default response. */
     reset(): void {
         this.responses = [];
         this.captured = [];
         this.defaultResponse = null;
+        this.matchers = [];
     }
 
     private async handle(req: Request): Promise<Response> {
@@ -133,7 +158,17 @@ export class MockProvider {
                 body,
             });
 
-            const scripted = this.responses.shift() ?? this.defaultResponse;
+            // Matcher routing: first-match-wins. Matchers can return tailored
+            // responses based on request body (e.g. slow down historian calls).
+            let matcherResponse: MockResponse | null = null;
+            for (const matcher of this.matchers) {
+                const resp = matcher(body, headers);
+                if (resp !== null) {
+                    matcherResponse = resp;
+                    break;
+                }
+            }
+            const scripted = matcherResponse ?? this.responses.shift() ?? this.defaultResponse;
             if (!scripted) {
                 return new Response(
                     JSON.stringify({
