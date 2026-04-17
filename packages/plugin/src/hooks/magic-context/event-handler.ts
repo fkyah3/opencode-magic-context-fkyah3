@@ -24,6 +24,7 @@ import type { ContextUsage } from "../../features/magic-context/types";
 import { log, sessionLog } from "../../shared/logger";
 import { removeCompactionMarkerForSession } from "./compaction-marker-manager";
 import { checkCompartmentTrigger } from "./compartment-trigger";
+import { deriveTriggerBudget } from './derive-budgets';
 import {
     getMessageRemovedInfo,
     getMessageUpdatedAssistantInfo,
@@ -295,18 +296,26 @@ export function createEventHandler(deps: EventHandlerDeps) {
                     const sessionMeta = getOrCreateSessionMeta(deps.db, info.sessionID);
                     const previousPercentage = sessionMeta.lastContextPercentage;
                     if (!sessionMeta.isSubagent) {
+                        const effectiveExecuteThreshold = resolveExecuteThreshold(
+                            deps.config.execute_threshold_percentage ?? 65,
+                            modelKey,
+                            65,
+                        );
+                        // Derive trigger_budget from the MAIN model's usable working
+                        // space (contextLimit × executeThreshold). This drives the
+                        // size-based historian triggers (tail_size, commit_clusters).
+                        const triggerBudget = deriveTriggerBudget(
+                            contextLimit,
+                            effectiveExecuteThreshold,
+                        );
                         const triggerResult = checkCompartmentTrigger(
                             deps.db,
                             info.sessionID,
                             sessionMeta,
                             { percentage, inputTokens: totalInputTokens },
                             previousPercentage,
-                            resolveExecuteThreshold(
-                                deps.config.execute_threshold_percentage ?? 65,
-                                modelKey,
-                                65,
-                            ),
-                            undefined, // compartmentTokenBudget — use default
+                            effectiveExecuteThreshold,
+                            triggerBudget,
                             deps.config.auto_drop_tool_age ?? 100,
                             deps.config.protected_tags,
                             deps.config.clear_reasoning_age ?? 50,

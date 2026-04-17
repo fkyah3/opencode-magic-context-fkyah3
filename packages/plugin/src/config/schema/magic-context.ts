@@ -5,7 +5,6 @@ import { AgentOverrideConfigSchema } from "./agent-overrides";
 
 export const DEFAULT_NUDGE_INTERVAL_TOKENS = 10_000;
 export const DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE = 65;
-export const DEFAULT_COMPARTMENT_TOKEN_BUDGET = 20_000;
 export const DEFAULT_HISTORIAN_TIMEOUT_MS = 300_000;
 export const DEFAULT_HISTORY_BUDGET_PERCENTAGE = 0.15;
 export const DEFAULT_LOCAL_EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
@@ -118,7 +117,6 @@ export interface MagicContextConfig {
     drop_tool_structure: boolean;
     clear_reasoning_age: number;
     iteration_nudge_threshold: number;
-    compartment_token_budget: number;
     history_budget_percentage: number;
     historian_timeout_ms: number;
     commit_cluster_trigger: {
@@ -186,8 +184,6 @@ export const MagicContextConfigSchema = z
         clear_reasoning_age: z.number().min(10).default(50),
         /** Number of consecutive assistant messages without user input to trigger iteration nudge (default: 15) */
         iteration_nudge_threshold: z.number().min(5).default(15),
-        /** Token budget for compartment agent when summarizing history (default: 20000) */
-        compartment_token_budget: z.number().min(10000).default(DEFAULT_COMPARTMENT_TOKEN_BUDGET),
         /** Fraction of usable context (context_limit × execute_threshold) reserved for the session history block (default: 0.15) */
         history_budget_percentage: z
             .number()

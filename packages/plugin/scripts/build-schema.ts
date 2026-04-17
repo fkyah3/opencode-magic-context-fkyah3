@@ -160,13 +160,6 @@ function buildSchema(): Record<string, unknown> {
                     "Number of consecutive assistant messages without user input to trigger iteration nudge",
             },
 
-            compartment_token_budget: {
-                type: "number",
-                minimum: 10000,
-                default: 20000,
-                description: "Token budget for compartment agent when summarizing history",
-            },
-
             history_budget_percentage: {
                 type: "number",
                 minimum: 0.05,

@@ -2,13 +2,16 @@ import type { MagicContextConfig } from "../config/schema/magic-context";
 import { consumeMessages, sendTuiToast } from "../features/magic-context/plugin-messages";
 import { openDatabase } from "../features/magic-context/storage";
 import { executeContextRecomp } from "../hooks/magic-context/compartment-runner";
+import {
+    deriveHistorianChunkTokens,
+    resolveHistorianContextLimit,
+} from "../hooks/magic-context/derive-budgets";
 import { getLiveNotificationParams } from "../hooks/magic-context/hook-handlers";
 import type { LiveSessionState } from "../hooks/magic-context/live-session-state";
 import { sendIgnoredMessage } from "../hooks/magic-context/send-session-notification";
 import { log } from "../shared/logger";
 import type { PluginContext } from "./types";
 
-const DEFAULT_COMPARTMENT_TOKEN_BUDGET = 20_000;
 const DEFAULT_HISTORIAN_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** Poll interval for TUI action messages (2 seconds). */
@@ -26,6 +29,12 @@ export function startTuiActionConsumer(args: {
     liveSessionState: LiveSessionState;
 }): (() => void) | undefined {
     const { client, directory, config, liveSessionState } = args;
+    const historianChunkTokens = deriveHistorianChunkTokens(
+        resolveHistorianContextLimit(
+            config.historian?.model,
+            (config as { modelContextLimitsCache?: Map<string, number> }).modelContextLimitsCache,
+        ),
+    );
     const getNotificationParams = (sessionId: string) =>
         getLiveNotificationParams(
             sessionId,
@@ -55,8 +64,7 @@ export function startTuiActionConsumer(args: {
                         client,
                         db,
                         sessionId,
-                        tokenBudget:
-                            config.compartment_token_budget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+                        historianChunkTokens,
                         historianTimeoutMs:
                             config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
                         directory,

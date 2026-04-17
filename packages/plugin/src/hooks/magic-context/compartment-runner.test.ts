@@ -111,7 +111,7 @@ describe("executeContextRecomp", () => {
             client,
             db,
             sessionId: "ses-recomp",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -221,7 +221,7 @@ describe("executeContextRecomp", () => {
             client,
             db,
             sessionId: "ses-recomp-fail",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -302,7 +302,7 @@ describe("executeContextRecomp", () => {
             client,
             db,
             sessionId: "ses-recomp-retry",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -384,7 +384,7 @@ describe("executeContextRecomp", () => {
             client,
             db,
             sessionId: "ses-recomp-full-state",
-            tokenBudget: 7,
+            historianChunkTokens: 7,
             directory: "/tmp",
         });
 
@@ -444,7 +444,7 @@ describe("executeContextRecomp", () => {
                     client,
                     db,
                     sessionId: "ses-recomp-timeout",
-                    tokenBudget: 10_000,
+                    historianChunkTokens: 10_000,
                     historianTimeoutMs: 300_000,
                     directory: "/tmp",
                 });
@@ -541,7 +541,7 @@ describe("executeContextRecomp", () => {
             client,
             db,
             sessionId: "ses-recomp-smaller",
-            tokenBudget: 80,
+            historianChunkTokens: 80,
             directory: "/tmp",
         });
 
@@ -622,7 +622,7 @@ describe("executeContextRecomp", () => {
             client,
             db,
             sessionId: "ses-recomp-no-smaller",
-            tokenBudget: 80,
+            historianChunkTokens: 80,
             directory: "/tmp",
         });
 
@@ -731,7 +731,7 @@ describe("executeContextRecomp", () => {
             client,
             db,
             sessionId: "ses-recomp-budget-reset",
-            tokenBudget: 60,
+            historianChunkTokens: 60,
             directory: "/tmp",
         });
 
@@ -938,7 +938,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-1",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -1009,7 +1009,7 @@ describe("runCompartmentAgent", () => {
                     client,
                     db,
                     sessionId: "ses-retry",
-                    tokenBudget: 10_000,
+                    historianChunkTokens: 10_000,
                     directory: "/tmp",
                 });
             });
@@ -1086,7 +1086,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-fallback",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
             fallbackModelId: "openai/gpt-4o",
         });
@@ -1195,7 +1195,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-2",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -1300,7 +1300,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-tag-drops",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -1343,7 +1343,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-protected-only",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -1400,7 +1400,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-eligible-prefix",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -1463,7 +1463,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-invalid-existing",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -1520,7 +1520,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-invalid-output",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 
@@ -1566,7 +1566,7 @@ describe("runCompartmentAgent", () => {
             client,
             db,
             sessionId: "ses-model-failure",
-            tokenBudget: 10_000,
+            historianChunkTokens: 10_000,
             directory: "/tmp",
         });
 

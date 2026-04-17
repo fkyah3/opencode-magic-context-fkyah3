@@ -6,7 +6,12 @@ export interface CompartmentRunnerDeps {
     client: PluginContext["client"];
     db: Database;
     sessionId: string;
-    tokenBudget: number;
+    /**
+     * Historian chunk budget — how much raw history historian processes per
+     * call. Bounded by the HISTORIAN model's context window, not main's.
+     * Derived via `deriveHistorianChunkTokens(historianContextLimit)`.
+     */
+    historianChunkTokens: number;
     historianTimeoutMs?: number;
     directory: string;
     historyBudgetTokens?: number;

@@ -94,7 +94,7 @@ Check verifiable memories against actual repository state. Update stale wording,
 4. **Be conservative.** If you cannot find the referenced code but it might be in a location you haven't checked, do NOT archive. Move on.
 
 ### Verification examples
-- Memory: "compartment_token_budget defaults to 20000" → grep schema for \`compartment_token_budget\`, check \`.default(...)\`
+- Memory: "history_budget_percentage defaults to 0.15" → grep schema for \`history_budget_percentage\`, check \`.default(...)\`
 - Memory: "Durable state lives in ~/.local/share/opencode/storage/plugin/magic-context/context.db" → check storage-db.ts for the path construction
 - Memory: "ctx_search searches memories, facts, and history" → grep for ctx_search tool definition and unified search implementation
 

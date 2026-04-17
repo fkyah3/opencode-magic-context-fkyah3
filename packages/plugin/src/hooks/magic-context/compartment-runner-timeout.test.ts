@@ -50,7 +50,7 @@ describe("historian timeout wiring", () => {
                 client,
                 db,
                 sessionId: "ses-incremental-timeout",
-                tokenBudget: 10_000,
+                historianChunkTokens: 10_000,
                 historianTimeoutMs: 456_789,
                 directory: "/tmp",
             });
@@ -90,7 +90,7 @@ describe("historian timeout wiring", () => {
                 client,
                 db,
                 sessionId: "ses-recomp-timeout-wiring",
-                tokenBudget: 10_000,
+                historianChunkTokens: 10_000,
                 historianTimeoutMs: 456_789,
                 directory: "/tmp",
             });

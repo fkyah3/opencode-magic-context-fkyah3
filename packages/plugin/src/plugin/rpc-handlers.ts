@@ -481,12 +481,22 @@ export function registerRpcHandlers(
         const { sendIgnoredMessage } = await import(
             "../hooks/magic-context/send-session-notification"
         );
+        const { deriveHistorianChunkTokens, resolveHistorianContextLimit } = await import(
+            "../hooks/magic-context/derive-budgets"
+        );
 
         const db = getDb();
         if (!db) return { ok: false, error: "db unavailable" };
 
-        const DEFAULT_COMPARTMENT_TOKEN_BUDGET = 20_000;
         const DEFAULT_HISTORIAN_TIMEOUT_MS = 10 * 60 * 1000;
+
+        const historianChunkTokens = deriveHistorianChunkTokens(
+            resolveHistorianContextLimit(
+                config.historian?.model,
+                (config as { modelContextLimitsCache?: Map<string, number> })
+                    .modelContextLimitsCache,
+            ),
+        );
 
         log(`[rpc] recomp requested for session ${sessionId}`);
 
@@ -495,7 +505,7 @@ export function registerRpcHandlers(
             client: args.client as never,
             db,
             sessionId,
-            tokenBudget: config.compartment_token_budget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+            historianChunkTokens,
             historianTimeoutMs: config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
             directory,
             getNotificationParams: () => getNotificationParams(sessionId),

@@ -155,7 +155,7 @@ describe("createTransform heuristic cleanup persistence", () => {
             dropToolStructure: true,
             client: undefined,
             directory: testDirectory,
-            compartmentTokenBudget: 20_000,
+            historianChunkTokens: 20_000,
         });
 
         await transform({}, { messages: buildMessages() });
@@ -209,7 +209,7 @@ describe("createTransform heuristic cleanup persistence", () => {
             dropToolStructure: true,
             client: undefined,
             directory: testDirectory,
-            compartmentTokenBudget: 20_000,
+            historianChunkTokens: 20_000,
         });
 
         await transform({}, { messages: buildInjectionOnlyMessages() });

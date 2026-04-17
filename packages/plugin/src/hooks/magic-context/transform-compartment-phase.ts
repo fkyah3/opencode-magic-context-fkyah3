@@ -1,4 +1,3 @@
-import { DEFAULT_COMPARTMENT_TOKEN_BUDGET } from "../../config/schema/magic-context";
 import { getLastCompartmentEndMessage } from "../../features/magic-context/compartment-storage";
 import { type ContextDatabase, updateSessionMeta } from "../../features/magic-context/storage";
 import type { PluginContext } from "../../plugin/types";
@@ -40,7 +39,7 @@ interface RunCompartmentPhaseArgs {
     db: ContextDatabase;
     sessionId: string;
     resolvedSessionId: string;
-    compartmentTokenBudget?: number;
+    historianChunkTokens: number;
     historyBudgetTokens?: number;
     historianTimeoutMs?: number;
     compartmentDirectory: string;
@@ -145,7 +144,7 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
                 client: args.client,
                 db: args.db,
                 sessionId: args.sessionId,
-                tokenBudget: args.compartmentTokenBudget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+                historianChunkTokens: args.historianChunkTokens,
                 historyBudgetTokens: args.historyBudgetTokens,
                 historianTimeoutMs: args.historianTimeoutMs,
                 directory: args.compartmentDirectory,
@@ -180,7 +179,7 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
                 client: args.client,
                 db: args.db,
                 sessionId: args.sessionId,
-                tokenBudget: args.compartmentTokenBudget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+                historianChunkTokens: args.historianChunkTokens,
                 historyBudgetTokens: args.historyBudgetTokens,
                 historianTimeoutMs: args.historianTimeoutMs,
                 directory: args.compartmentDirectory,

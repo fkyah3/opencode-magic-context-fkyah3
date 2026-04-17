@@ -266,6 +266,18 @@ export async function runDoctor(
                 fixed++;
             }
 
+            // Remove `compartment_token_budget` — replaced by auto-derivation from
+            // main/historian model context in later versions. The value is no longer
+            // read; leaving it in config is harmless but misleading.
+            if ("compartment_token_budget" in mcConfig) {
+                delete mcConfig.compartment_token_budget;
+                mcChanged = true;
+                log.success(
+                    "Removed deprecated compartment_token_budget (auto-derived from model context now)",
+                );
+                fixed++;
+            }
+
             if (mcChanged) {
                 writeFileSync(paths.magicContextConfig, `${stringify(mcConfig, null, 2)}\n`);
             }

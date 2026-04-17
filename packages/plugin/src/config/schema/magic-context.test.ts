@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import {
-    DEFAULT_COMPARTMENT_TOKEN_BUDGET,
     DEFAULT_HISTORIAN_TIMEOUT_MS,
     DEFAULT_HISTORY_BUDGET_PERCENTAGE,
     DEFAULT_LOCAL_EMBEDDING_MODEL,
@@ -24,7 +23,6 @@ describe("MagicContextConfigSchema", () => {
                 drop_tool_structure: true,
                 clear_reasoning_age: 50,
                 iteration_nudge_threshold: 15,
-                compartment_token_budget: DEFAULT_COMPARTMENT_TOKEN_BUDGET,
                 history_budget_percentage: DEFAULT_HISTORY_BUDGET_PERCENTAGE,
                 historian_timeout_ms: DEFAULT_HISTORIAN_TIMEOUT_MS,
                 embedding: {
@@ -57,7 +55,6 @@ describe("MagicContextConfigSchema", () => {
                 drop_tool_structure: false,
                 clear_reasoning_age: 60,
                 iteration_nudge_threshold: 20,
-                compartment_token_budget: 25_000,
                 history_budget_percentage: 0.2,
                 historian_timeout_ms: 360_000,
                 commit_cluster_trigger: {

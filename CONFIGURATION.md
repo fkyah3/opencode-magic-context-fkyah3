@@ -68,7 +68,6 @@ Higher-tier models with longer cache windows benefit from a longer TTL. Setting 
 | `auto_drop_tool_age` | `number` | `100` | Auto-drop tool outputs older than N tags during execution. |
 | `clear_reasoning_age` | `number` | `50` | Clear thinking/reasoning blocks older than N tags. |
 | `iteration_nudge_threshold` | `number` | `15` | Consecutive assistant turns without user input before an iteration nudge. |
-| `compartment_token_budget` | `number` | `20000` | Token budget for historian input chunks. |
 | `historian_timeout_ms` | `number` | `300000` | Timeout per historian call (ms). |
 | `history_budget_percentage` | `number` (0–1) | `0.15` | Fraction of usable context reserved for the history block. Triggers compression when exceeded. |
 | `compaction_markers` | `boolean` | `true` | Inject compaction boundaries into OpenCode's DB after historian publishes. Reduces transform input size for long sessions. |
@@ -90,7 +89,7 @@ A **commit cluster** is a distinct work phase where the agent made one or more g
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `boolean` | `true` | Enable commit-cluster based historian triggering. |
-| `min_clusters` | `number` | `3` | Minimum number of commit clusters in the unsummarized tail before historian fires. The tail must also contain at least `compartment_token_budget` tokens. |
+| `min_clusters` | `number` | `3` | Minimum number of commit clusters in the unsummarized tail before historian fires. The tail must also contain at least one `trigger_budget` worth of tokens, where `trigger_budget = main_context × execute_threshold × 5%` clamped to `[5K, 50K]`. |
 
 Set `enabled: false` to disable this trigger entirely and rely only on pressure-based and tail-size triggers for historian.
 

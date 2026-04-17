@@ -1,5 +1,6 @@
+import type { z } from "zod";
+import type { AgentOverrideConfigSchema } from "../../config/schema/agent-overrides";
 import {
-    DEFAULT_COMPARTMENT_TOKEN_BUDGET,
     DEFAULT_HISTORIAN_TIMEOUT_MS,
     DEFAULT_NUDGE_INTERVAL_TOKENS,
     type DreamerConfig,
@@ -24,6 +25,7 @@ import type { PluginContext } from "../../plugin/types";
 import { getErrorMessage } from "../../shared/error-message";
 import { log } from "../../shared/logger";
 import { createMagicContextCommandHandler } from "./command-handler";
+import { deriveHistorianChunkTokens, resolveHistorianContextLimit } from './derive-budgets';
 import { createEventHandler } from "./event-handler";
 import { resolveModelKey } from "./event-resolvers";
 import { clearInjectionCache } from "./inject-compartments";
@@ -69,7 +71,7 @@ export interface MagicContextDeps {
         cache_ttl: string | Record<string, string>;
         modelContextLimitsCache?: Map<string, number>;
 
-        compartment_token_budget?: number;
+        historian?: z.infer<typeof AgentOverrideConfigSchema>;
         history_budget_percentage?: number;
         historian_timeout_ms?: number;
         memory?: {
@@ -149,6 +151,16 @@ export function createMagicContextHook(deps: MagicContextDeps) {
     registerDreamProjectDirectory(projectPath, deps.directory);
 
     let lastScheduleCheckMs = 0;
+
+    // Derive historian chunk budget from the historian model's own context window.
+    // Historian is a single-shot summarizer, so its input is bounded by its OWN
+    // context, not the main session model's. Computed once per hook instance.
+    const historianContextLimit = resolveHistorianContextLimit(
+        deps.config.historian?.model,
+        deps.config.modelContextLimitsCache,
+    );
+    const historianChunkTokens = deriveHistorianChunkTokens(historianContextLimit);
+
     const nudgePlacements = createNudgePlacementStore(db);
     const flushedSessions = new Set<string>();
     const lastHeuristicsTurnId = new Map<string, string>();
@@ -195,8 +207,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
                   injectionBudgetTokens: deps.config.memory.injection_budget_tokens,
               }
             : undefined,
-        compartmentTokenBudget:
-            deps.config.compartment_token_budget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+        historianChunkTokens,
         historyBudgetPercentage: deps.config.history_budget_percentage,
         executeThresholdPercentage: deps.config.execute_threshold_percentage,
         historianTimeoutMs: deps.config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
@@ -294,8 +305,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
                 client: deps.client,
                 db,
                 sessionId,
-                tokenBudget:
-                    deps.config.compartment_token_budget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+                historianChunkTokens,
                 historianTimeoutMs:
                     deps.config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
                 directory: deps.directory,

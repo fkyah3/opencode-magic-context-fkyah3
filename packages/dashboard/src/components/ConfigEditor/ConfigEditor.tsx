@@ -75,7 +75,6 @@ const FIELD_DEFS: FieldDef[] = [
   { key: "clear_reasoning_age", label: "Clear Reasoning Age", type: "number", description: "Tag age after which reasoning blocks are cleared.", section: "Tags & Cleanup" },
   { key: "iteration_nudge_threshold", label: "Iteration Nudge Threshold", type: "number", description: "Number of consecutive tool calls before showing an iteration nudge.", section: "General" },
   // Historian
-  { key: "compartment_token_budget", label: "Compartment Token Budget", type: "number", description: "Max tokens per historian chunk input.", section: "Historian" },
   { key: "history_budget_percentage", label: "History Budget %", type: "number", description: "Fraction of context limit reserved for rendered history (0.0–1.0).", section: "Historian" },
   { key: "historian_timeout_ms", label: "Historian Timeout (ms)", type: "number", description: "Max wait time for a historian run before timeout.", section: "Historian" },
   // Memory
@@ -130,7 +129,6 @@ const RANGE_SLIDER_FIELDS = new Set([
   "auto_drop_tool_age",
   "clear_reasoning_age",
   "iteration_nudge_threshold",
-  "compartment_token_budget",
   "historian_timeout_ms",
   "memory.injection_budget_tokens",
 ]);
@@ -220,8 +218,6 @@ function ConfigForm(props: {
         return { min: 10, max: 200, step: 5, suffix: "", defaultValue: 50 };
       case "iteration_nudge_threshold":
         return { min: 5, max: 30, step: 1, suffix: "", defaultValue: 15 };
-      case "compartment_token_budget":
-        return { min: 10000, max: 100000, step: 5000, suffix: " tokens", defaultValue: 20000 };
       case "historian_timeout_ms":
         return { min: 60000, max: 600000, step: 30000, suffix: " ms", defaultValue: 300000 };
       case "memory.injection_budget_tokens":

@@ -1,5 +1,4 @@
 import type { Database } from "bun:sqlite";
-import { DEFAULT_COMPARTMENT_TOKEN_BUDGET } from "../../config/schema/magic-context";
 import { getLastCompartmentEndMessage } from "../../features/magic-context/compartment-storage";
 import { getPendingOps, getTagsBySession } from "../../features/magic-context/storage";
 import type { ContextUsage, SessionMeta } from "../../features/magic-context/types";
@@ -139,7 +138,7 @@ const TAIL_INFO_DEFAULTS: TailInfo = {
 function getUnsummarizedTailInfo(
     db: Database,
     sessionId: string,
-    compartmentTokenBudget: number,
+    triggerBudget: number,
 ): TailInfo {
     return withRawSessionMessageCache(() => {
         try {
@@ -155,10 +154,10 @@ function getUnsummarizedTailInfo(
             }
 
             // Read a large enough window to capture commit clusters and tail size.
-            // Use 3x the compartment budget so we can detect the tail-size trigger.
+            // Use 3x the trigger budget so we can detect the tail-size trigger.
             const scanBudget = Math.max(
                 MIN_PROACTIVE_TAIL_TOKEN_ESTIMATE,
-                compartmentTokenBudget * TAIL_SIZE_TRIGGER_MULTIPLIER,
+                triggerBudget * TAIL_SIZE_TRIGGER_MULTIPLIER,
             );
             const chunk = readSessionChunk(
                 sessionId,
@@ -192,7 +191,7 @@ export function checkCompartmentTrigger(
     usage: ContextUsage,
     _previousPercentage: number,
     executeThresholdPercentage: number,
-    compartmentTokenBudget: number = DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+    triggerBudget: number,
     autoDropToolAge?: number,
     protectedTagCount?: number,
     clearReasoningAge?: number,
@@ -203,7 +202,7 @@ export function checkCompartmentTrigger(
         return { shouldFire: false };
     }
 
-    const tailInfo = getUnsummarizedTailInfo(db, sessionId, compartmentTokenBudget);
+    const tailInfo = getUnsummarizedTailInfo(db, sessionId, triggerBudget);
     if (!tailInfo.hasNewRawHistory) {
         return { shouldFire: false };
     }
@@ -247,7 +246,7 @@ export function checkCompartmentTrigger(
     if (
         clusterEnabled &&
         tailInfo.commitClusterCount >= minClusters &&
-        tailInfo.tokenEstimate >= compartmentTokenBudget
+        tailInfo.tokenEstimate >= triggerBudget
     ) {
         sessionLog(
             sessionId,
@@ -257,10 +256,10 @@ export function checkCompartmentTrigger(
     }
 
     // Tail-size trigger: eligible prefix is very large regardless of pressure or commits
-    if (tailInfo.tokenEstimate >= compartmentTokenBudget * TAIL_SIZE_TRIGGER_MULTIPLIER) {
+    if (tailInfo.tokenEstimate >= triggerBudget * TAIL_SIZE_TRIGGER_MULTIPLIER) {
         sessionLog(
             sessionId,
-            `compartment trigger: tail-size fire — ~${tailInfo.tokenEstimate} tokens exceeds ${compartmentTokenBudget * TAIL_SIZE_TRIGGER_MULTIPLIER} budget threshold`,
+            `compartment trigger: tail-size fire — ~${tailInfo.tokenEstimate} tokens exceeds ${triggerBudget * TAIL_SIZE_TRIGGER_MULTIPLIER} budget threshold`,
         );
         return { shouldFire: true, reason: "tail_size" };
     }

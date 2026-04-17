@@ -1,4 +1,3 @@
-import { DEFAULT_COMPARTMENT_TOKEN_BUDGET } from "../../config/schema/magic-context";
 import { getLastCompartmentEndMessage } from "../../features/magic-context/compartment-storage";
 import { resolveProjectIdentity } from "../../features/magic-context/memory/project-identity";
 import type { Scheduler } from "../../features/magic-context/scheduler";
@@ -101,7 +100,7 @@ export interface TransformDeps {
         enabled: boolean;
         injectionBudgetTokens: number;
     };
-    compartmentTokenBudget?: number;
+    historianChunkTokens: number;
     historyBudgetPercentage?: number;
     executeThresholdPercentage?: number | { default: number; [modelKey: string]: number };
     historianTimeoutMs?: number;
@@ -281,7 +280,7 @@ export function createTransform(deps: TransformDeps) {
                 client: deps.client,
                 db,
                 sessionId,
-                tokenBudget: deps.compartmentTokenBudget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+                historianChunkTokens: deps.historianChunkTokens,
                 historyBudgetTokens,
                 historianTimeoutMs: deps.historianTimeoutMs,
                 directory: compartmentDirectory,
@@ -495,7 +494,7 @@ export function createTransform(deps: TransformDeps) {
             db,
             sessionId,
             resolvedSessionId,
-            compartmentTokenBudget: deps.compartmentTokenBudget ?? DEFAULT_COMPARTMENT_TOKEN_BUDGET,
+            historianChunkTokens: deps.historianChunkTokens,
             historyBudgetTokens,
             historianTimeoutMs: deps.historianTimeoutMs,
             compartmentDirectory,

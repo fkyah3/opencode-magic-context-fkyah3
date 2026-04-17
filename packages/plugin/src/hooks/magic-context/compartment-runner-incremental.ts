@@ -52,7 +52,7 @@ export async function runCompartmentAgent(deps: CompartmentRunnerDeps): Promise<
         client,
         db,
         sessionId,
-        tokenBudget,
+        historianChunkTokens,
         directory,
         historianTimeoutMs,
         getNotificationParams,
@@ -96,7 +96,7 @@ export async function runCompartmentAgent(deps: CompartmentRunnerDeps): Promise<
             return;
         }
 
-        const chunk = readSessionChunk(sessionId, tokenBudget, offset, protectedTailStart);
+        const chunk = readSessionChunk(sessionId, historianChunkTokens, offset, protectedTailStart);
         if (!chunk.text || chunk.messageCount === 0) {
             return;
         }

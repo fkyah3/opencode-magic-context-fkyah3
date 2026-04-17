@@ -36,7 +36,7 @@ export async function executeContextRecompInternal(deps: CompartmentRunnerDeps):
         client,
         db,
         sessionId,
-        tokenBudget,
+        historianChunkTokens,
         directory,
         historianTimeoutMs,
         getNotificationParams,
@@ -76,7 +76,7 @@ export async function executeContextRecompInternal(deps: CompartmentRunnerDeps):
             existingStaging?.facts ?? [];
         let offset = existingStaging ? existingStaging.lastEndMessage + 1 : 1;
         let passCount = existingStaging?.passCount ?? 0;
-        let currentTokenBudget = tokenBudget;
+        let currentTokenBudget = historianChunkTokens;
         let passAttempt = 1;
         const resumed = existingStaging !== null;
 
@@ -247,7 +247,7 @@ export async function executeContextRecompInternal(deps: CompartmentRunnerDeps):
             // Intentional: facts are replaced each pass (historian returns complete updated set), while compartments accumulate
             candidateFacts = validatedPass.facts ?? [];
             passCount += 1;
-            currentTokenBudget = tokenBudget;
+            currentTokenBudget = historianChunkTokens;
             passAttempt = 1;
 
             // ── Persist to staging after each successful pass ────────────────

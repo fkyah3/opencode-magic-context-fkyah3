@@ -50,7 +50,7 @@ export function createSessionHooks(args: {
                 execute_threshold_percentage:
                     pluginConfig.execute_threshold_percentage ??
                     DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE,
-                compartment_token_budget: pluginConfig.compartment_token_budget,
+                historian: pluginConfig.historian,
                 history_budget_percentage: pluginConfig.history_budget_percentage,
                 historian_timeout_ms: pluginConfig.historian_timeout_ms,
                 memory: pluginConfig.memory,
