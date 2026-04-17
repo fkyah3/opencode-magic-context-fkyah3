@@ -7,25 +7,14 @@ type CacheTtlConfig = string | Record<string, string>;
 export function resolveContextLimit(
     providerID: string | undefined,
     modelID: string | undefined,
-    config: {
-        modelContextLimitsCache?: Map<string, number>;
-    },
 ): number {
     if (!providerID) {
         return DEFAULT_CONTEXT_LIMIT;
     }
 
-    // 1. Check user-configured model-specific limits first (highest priority)
-    if (modelID) {
-        const modelSpecific = config.modelContextLimitsCache?.get(`${providerID}/${modelID}`);
-        if (typeof modelSpecific === "number" && modelSpecific > 0) {
-            return modelSpecific;
-        }
-    }
-
-    // 2. Check OpenCode's models.dev cache for accurate per-model limits.
-    // This file is maintained by OpenCode at ~/.cache/opencode/models.json
-    // and contains limit.context for every known provider/model combination.
+    // Read from OpenCode's models.dev cache file at ~/.cache/opencode/models.json.
+    // `getModelsDevContextLimit` also overlays custom `provider.*.models.*.limit.context`
+    // entries from the user's opencode.json(c), so explicit user overrides are honored.
     if (modelID) {
         const modelsDevLimit = getModelsDevContextLimit(providerID, modelID);
         if (modelsDevLimit !== undefined) {
@@ -33,7 +22,7 @@ export function resolveContextLimit(
         }
     }
 
-    // 3. Conservative default for models not found in models.dev
+    // Conservative default for models not in models.dev and not configured.
     return DEFAULT_CONTEXT_LIMIT;
 }
 

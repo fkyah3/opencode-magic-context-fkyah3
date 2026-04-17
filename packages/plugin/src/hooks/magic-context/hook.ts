@@ -69,7 +69,6 @@ export interface MagicContextDeps {
         iteration_nudge_threshold?: number;
         execute_threshold_percentage?: number | { default: number; [modelKey: string]: number };
         cache_ttl: string | Record<string, string>;
-        modelContextLimitsCache?: Map<string, number>;
 
         historian?: z.infer<typeof AgentOverrideConfigSchema>;
         history_budget_percentage?: number;
@@ -154,12 +153,11 @@ export function createMagicContextHook(deps: MagicContextDeps) {
 
     // Derive historian chunk budget from the historian model's own context window.
     // Historian is a single-shot summarizer, so its input is bounded by its OWN
-    // context, not the main session model's. Computed once per hook instance.
-    const historianContextLimit = resolveHistorianContextLimit(
-        deps.config.historian?.model,
-        deps.config.modelContextLimitsCache,
-    );
-    const historianChunkTokens = deriveHistorianChunkTokens(historianContextLimit);
+    // context, not the main session model's. Re-derived per historian invocation
+    // (matching RPC/TUI paths) so config/model changes take effect without
+    // restart, and so all trigger sources produce consistent chunk sizes.
+    const getHistorianChunkTokens = (): number =>
+        deriveHistorianChunkTokens(resolveHistorianContextLimit(deps.config.historian?.model));
 
     const nudgePlacements = createNudgePlacementStore(db);
     const flushedSessions = new Set<string>();
@@ -207,7 +205,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
                   injectionBudgetTokens: deps.config.memory.injection_budget_tokens,
               }
             : undefined,
-        historianChunkTokens,
+        getHistorianChunkTokens,
         historyBudgetPercentage: deps.config.history_budget_percentage,
         executeThresholdPercentage: deps.config.execute_threshold_percentage,
         historianTimeoutMs: deps.config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
@@ -305,7 +303,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
                 client: deps.client,
                 db,
                 sessionId,
-                historianChunkTokens,
+                historianChunkTokens: getHistorianChunkTokens(),
                 historianTimeoutMs:
                     deps.config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
                 directory: deps.directory,

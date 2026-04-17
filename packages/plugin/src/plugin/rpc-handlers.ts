@@ -491,11 +491,7 @@ export function registerRpcHandlers(
         const DEFAULT_HISTORIAN_TIMEOUT_MS = 10 * 60 * 1000;
 
         const historianChunkTokens = deriveHistorianChunkTokens(
-            resolveHistorianContextLimit(
-                config.historian?.model,
-                (config as { modelContextLimitsCache?: Map<string, number> })
-                    .modelContextLimitsCache,
-            ),
+            resolveHistorianContextLimit(config.historian?.model),
         );
 
         log(`[rpc] recomp requested for session ${sessionId}`);

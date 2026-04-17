@@ -109,24 +109,35 @@ export function runPostTransformPhase(args: RunPostTransformPhaseArgs): void {
     // Emergency bypass: at forceMaterialization threshold (>=85%), allow both
     // pending-op materialization and heuristic cleanup to run even while a
     // historian run is in progress. This is safe because:
-    //   - Historian reads raw messages from opencode.db and writes to
-    //     compartments/session_facts/memories tables. It does not read or
-    //     write `tags` or `pending_ops`.
-    //   - Drops mutate `tags` and `pending_ops` only.
-    //   - The only shared mutation point is `queueDropsForCompartmentalizedMessages`,
-    //     which historian calls AFTER publication from a DB transaction — safe
-    //     against concurrent reads in SQLite WAL mode.
+    //   - Historian reads raw OpenCode messages from opencode.db (read-only).
+    //     It does not touch the plugin's context.db where tags/pending_ops live.
+    //     The two databases are fully disjoint on the read/write side.
+    //   - Drops mutate tags + pending_ops in context.db only.
+    //   - The only shared mutation point is historian's call to
+    //     `queueDropsForCompartmentalizedMessages` after it publishes, which
+    //     writes to context.db's tags/pending_ops in a separate transaction.
+    //     That function is idempotent against already-dropped tags (filters by
+    //     `tag.status !== "active"`), so any ordering with the emergency bypass
+    //     is benign.
     // Without this bypass, fast autonomous loops with sustained pressure can
     // keep compartmentRunning=true across every turn, so drops queued for
     // already-published compartments accumulate forever and context overflows.
     // At emergency levels we prioritize overflow prevention over cache stability.
     const emergencyBypassCompartmentGate = forceMaterialization;
     const shouldReadPendingOps =
-        isExplicitFlush || args.schedulerDecision === "execute" || compartmentRunning;
+        isExplicitFlush ||
+        args.schedulerDecision === "execute" ||
+        forceMaterialization ||
+        compartmentRunning;
     const pendingOps = shouldReadPendingOps ? getPendingOps(args.db, args.sessionId) : [];
     const hasPendingUserOps = pendingOps.length > 0;
+    // Finding #3: include `forceMaterialization` so the emergency bypass is
+    // self-sufficient. Without it, if `MAX_EXECUTE_THRESHOLD` is ever raised
+    // above 85%, scheduler would return "defer" at 85% usage, but heuristic
+    // cleanup would still fire (it gates on forceMaterialization directly),
+    // causing unguarded cache busts while pending ops stop materializing.
     const shouldApplyPendingOps =
-        (args.schedulerDecision === "execute" || isExplicitFlush) &&
+        (args.schedulerDecision === "execute" || isExplicitFlush || forceMaterialization) &&
         (!compartmentRunning || emergencyBypassCompartmentGate);
     // Central cache-busting gate used by all mutation paths below.
     const isCacheBustingPass = isExplicitFlush || shouldApplyPendingOps;

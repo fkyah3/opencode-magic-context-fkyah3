@@ -8,40 +8,14 @@ import {
 
 describe("event-resolvers", () => {
     describe("resolveContextLimit", () => {
-        it("returns model-specific cache limit for non-anthropic providers", () => {
-            //#given
-            const config = {
-                modelContextLimitsCache: new Map([["openai/gpt-4o", 300_000]]),
-            };
+        // resolveContextLimit reads from getModelsDevContextLimit (which overlays
+        // opencode.json custom provider limits on top of the models.dev cache).
+        // The tests below validate the fallback-to-default path. The models.dev
+        // integration is covered by models-dev-cache tests.
 
-            //#when
-            const limit = resolveContextLimit("openai", "gpt-4o", config);
-
-            //#then
-            expect(limit).toBe(300_000);
-        });
-
-        it("returns model-specific cache limit for anthropic when user overrides", () => {
-            //#given — user explicitly sets a custom limit in their provider config
-            const config = {
-                modelContextLimitsCache: new Map([["anthropic/claude-opus-4-6", 500_000]]),
-            };
-
-            //#when
-            const limit = resolveContextLimit("anthropic", "claude-opus-4-6", config);
-
-            //#then
-            expect(limit).toBe(500_000);
-        });
-
-        it("resolves anthropic context from models.dev when no cache entry exists", () => {
-            //#given
-            const config = {
-                modelContextLimitsCache: new Map<string, number>(),
-            };
-
+        it("resolves anthropic context from models.dev when available", () => {
             //#when — models.dev may return 200K (real limit) or 128K (default if no models.json)
-            const limit = resolveContextLimit("anthropic", "claude-opus-4-5", config);
+            const limit = resolveContextLimit("anthropic", "claude-opus-4-5");
 
             //#then — should NOT be 1M; uses models.dev real limit or conservative default
             expect(limit).toBeLessThanOrEqual(200_000);
@@ -49,11 +23,16 @@ describe("event-resolvers", () => {
         });
 
         it("returns default for missing provider", () => {
-            //#given
-            const config = { modelContextLimitsCache: new Map<string, number>() };
-
             //#when
-            const limit = resolveContextLimit(undefined, "gpt-4o", config);
+            const limit = resolveContextLimit(undefined, "gpt-4o");
+
+            //#then
+            expect(limit).toBe(128_000);
+        });
+
+        it("returns default for unknown provider/model not in models.dev or opencode.json", () => {
+            //#when
+            const limit = resolveContextLimit("unknown-provider", "unknown-model-xyz");
 
             //#then
             expect(limit).toBe(128_000);

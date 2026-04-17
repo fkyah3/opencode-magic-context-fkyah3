@@ -1,7 +1,11 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, it } from "bun:test";
-import { deriveHistorianChunkTokens, deriveTriggerBudget } from "./derive-budgets";
+import {
+    deriveHistorianChunkTokens,
+    deriveTriggerBudget,
+    resolveHistorianContextLimit,
+} from "./derive-budgets";
 
 describe("deriveTriggerBudget", () => {
     it("scales with main_context × execute_threshold × 0.05", () => {
@@ -75,5 +79,40 @@ describe("deriveHistorianChunkTokens", () => {
         expect(deriveHistorianChunkTokens(0)).toBe(8_000);
         expect(deriveHistorianChunkTokens(-1)).toBe(8_000);
         expect(deriveHistorianChunkTokens(Number.NaN)).toBe(8_000);
+    });
+});
+
+describe("resolveHistorianContextLimit", () => {
+    it("returns a positive context limit with no override (scans fallback chain)", () => {
+        // No override — should traverse the fallback chain and return the minimum
+        // known context across entries (or 128K if nothing resolves).
+        const limit = resolveHistorianContextLimit();
+        expect(limit).toBeGreaterThan(0);
+        expect(limit).toBeLessThanOrEqual(1_000_000);
+    });
+
+    it("returns a positive context limit for an explicit provider/model override", () => {
+        // Explicit override with / form. Whether or not models.dev knows this
+        // model, the function should never return 0 or NaN.
+        const limit = resolveHistorianContextLimit("anthropic/claude-sonnet-4-6");
+        expect(limit).toBeGreaterThan(0);
+        expect(Number.isFinite(limit)).toBe(true);
+    });
+
+    it("falls through to chain for provider-less override and returns a positive value", () => {
+        // Provider-less override should warn and fall through to the chain
+        // (rather than silently returning DEFAULT and losing the derivation).
+        const originalWarn = console.warn;
+        let warnedWith: string | undefined;
+        console.warn = (msg: unknown) => {
+            warnedWith = typeof msg === "string" ? msg : String(msg);
+        };
+        try {
+            const limit = resolveHistorianContextLimit("llama3-32k");
+            expect(limit).toBeGreaterThan(0);
+            expect(warnedWith).toContain("llama3-32k");
+        } finally {
+            console.warn = originalWarn;
+        }
     });
 });

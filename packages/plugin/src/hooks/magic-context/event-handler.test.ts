@@ -92,7 +92,6 @@ function createDeps(contextUsageMap: Map<string, { usage: ContextUsage; updatedA
         config: {
             protected_tags: 5,
             cache_ttl: "5m" as string | Record<string, string>,
-            modelContextLimitsCache: undefined as Map<string, number> | undefined,
         },
         tagger: {
             assignTag: mock(() => 0),
@@ -256,12 +255,11 @@ describe("createEventHandler", () => {
         expect(entry?.usage.inputTokens).toBe(124_000);
     });
 
-    it("uses provider/model-specific context limits and cache ttl", async () => {
+    it("resolves model-specific cache ttl via per-model config", async () => {
         useTempDataHome("context-event-provider-model-");
         const contextUsageMap = new Map<string, { usage: ContextUsage; updatedAt: number }>();
         const deps = createDeps(contextUsageMap);
         deps.config.cache_ttl = { default: "5m", "gpt-4o": "1m" };
-        deps.config.modelContextLimitsCache = new Map([["openai/gpt-4o", 400_000]]);
         const handler = createEventHandler(deps);
 
         await handler({
@@ -280,8 +278,8 @@ describe("createEventHandler", () => {
             },
         });
 
-        const usage = contextUsageMap.get("ses-model");
-        expect(usage?.usage.percentage).toBeCloseTo(50, 5);
+        // Context-limit resolution is covered by event-resolvers.test.ts; here we
+        // validate that per-model cache_ttl is applied via the shared event path.
         expect(getOrCreateSessionMeta(openDatabase(), "ses-model").cacheTtl).toBe("1m");
     });
 

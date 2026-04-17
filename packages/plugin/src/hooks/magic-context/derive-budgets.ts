@@ -75,48 +75,62 @@ export function deriveHistorianChunkTokens(historianContextLimit: number): numbe
 }
 
 /**
- * Resolve the historian model's context limit.
+ * Resolve the historian model's context limit for chunk budget sizing.
  *
- * Priority:
- *   1. Explicit `historian.model` config ("provider/model-id")
- *   2. First entry of the historian fallback chain
- *   3. Conservative 128K default
+ * Behavior:
+ *   - If `historianModelOverride` is a full `provider/model-id` → use that model's
+ *     context directly. This honors explicit user intent.
+ *   - If the override is set but lacks `/` (e.g. `"llama3-32k"`) → warn and fall
+ *     through to the fallback chain, since we can't look up models without a
+ *     provider and silently ignoring would produce incorrect chunk sizes.
+ *   - If no override → scan the expanded fallback chain (all `provider/model`
+ *     combinations OpenCode might try) and use the MINIMUM resolved context.
+ *     This is defensive: if the first-choice model is unavailable and OpenCode
+ *     falls back to a smaller-context entry, the chunk budget is still safe.
+ *   - If neither models.dev nor opencode.json custom providers know the model,
+ *     fall back to 128K as a conservative default.
+ *
+ * Context limits are resolved through `getModelsDevContextLimit`, which reads
+ * both OpenCode's models.dev cache and custom `provider.*.models.*.limit.context`
+ * entries from `opencode.json(c)`.
  */
-export function resolveHistorianContextLimit(
-    historianModelOverride?: string,
-    modelContextLimitsCache?: Map<string, number>,
-): number {
-    const modelKey = pickHistorianModelKey(historianModelOverride);
-    if (!modelKey) {
+export function resolveHistorianContextLimit(historianModelOverride?: string): number {
+    // Explicit override with full provider/model form — user intent wins.
+    if (typeof historianModelOverride === "string" && historianModelOverride.includes("/")) {
+        const [providerID, ...rest] = historianModelOverride.split("/");
+        const modelID = rest.join("/");
+        if (providerID && modelID) {
+            const limit = getModelsDevContextLimit(providerID, modelID);
+            if (typeof limit === "number" && limit > 0) return limit;
+        }
         return DEFAULT_HISTORIAN_CONTEXT_FALLBACK;
     }
 
-    const [providerID, ...rest] = modelKey.split("/");
-    const modelID = rest.join("/");
-    if (!providerID || !modelID) {
-        return DEFAULT_HISTORIAN_CONTEXT_FALLBACK;
+    // Warn-and-fall-through for malformed overrides (Finding #4 sub-fix).
+    if (typeof historianModelOverride === "string" && historianModelOverride.trim() !== "") {
+        // Intentional: this is a config error we surface at log level, not a crash,
+        // because the fallback chain still produces a workable budget.
+        // eslint-disable-next-line no-console
+        console.warn(
+            `[magic-context] historian.model "${historianModelOverride}" lacks provider prefix ("provider/model-id"); using fallback chain for chunk-budget derivation.`,
+        );
     }
 
-    // User-configured override wins
-    const userOverride = modelContextLimitsCache?.get(modelKey);
-    if (typeof userOverride === "number" && userOverride > 0) {
-        return userOverride;
-    }
-
-    const fromModelsDev = getModelsDevContextLimit(providerID, modelID);
-    if (typeof fromModelsDev === "number" && fromModelsDev > 0) {
-        return fromModelsDev;
-    }
-
-    return DEFAULT_HISTORIAN_CONTEXT_FALLBACK;
-}
-
-function pickHistorianModelKey(override?: string): string | undefined {
-    if (typeof override === "string" && override.includes("/")) {
-        return override;
-    }
+    // Defensive minimum across the full expanded chain. This protects against
+    // the first-choice model being unavailable and OpenCode falling back to a
+    // smaller-context entry that would overflow with the larger chunk budget.
     const chain = AGENT_MODEL_REQUIREMENTS[HISTORIAN_AGENT]?.fallbackChain;
-    if (!chain || chain.length === 0) return undefined;
+    if (!chain || chain.length === 0) return DEFAULT_HISTORIAN_CONTEXT_FALLBACK;
     const expanded = expandFallbackChain(chain);
-    return expanded[0];
+
+    let minLimit: number | undefined;
+    for (const key of expanded) {
+        const [providerID, ...rest] = key.split("/");
+        const modelID = rest.join("/");
+        if (!providerID || !modelID) continue;
+        const limit = getModelsDevContextLimit(providerID, modelID);
+        if (typeof limit !== "number" || limit <= 0) continue;
+        if (minLimit === undefined || limit < minLimit) minLimit = limit;
+    }
+    return minLimit ?? DEFAULT_HISTORIAN_CONTEXT_FALLBACK;
 }

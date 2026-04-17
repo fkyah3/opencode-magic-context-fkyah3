@@ -100,7 +100,13 @@ export interface TransformDeps {
         enabled: boolean;
         injectionBudgetTokens: number;
     };
-    historianChunkTokens: number;
+    /**
+     * Returns the historian chunk budget. Called at each historian spawn site
+     * so the value is always derived from current config — keeping hook,
+     * RPC, and TUI trigger paths consistent and honoring runtime config changes.
+     * Optional for tests; production (hook.ts) always provides it.
+     */
+    getHistorianChunkTokens?: () => number;
     historyBudgetPercentage?: number;
     executeThresholdPercentage?: number | { default: number; [modelKey: string]: number };
     historianTimeoutMs?: number;
@@ -280,7 +286,7 @@ export function createTransform(deps: TransformDeps) {
                 client: deps.client,
                 db,
                 sessionId,
-                historianChunkTokens: deps.historianChunkTokens,
+                historianChunkTokens: deps.getHistorianChunkTokens?.() ?? 20_000,
                 historyBudgetTokens,
                 historianTimeoutMs: deps.historianTimeoutMs,
                 directory: compartmentDirectory,
@@ -494,7 +500,7 @@ export function createTransform(deps: TransformDeps) {
             db,
             sessionId,
             resolvedSessionId,
-            historianChunkTokens: deps.historianChunkTokens,
+            historianChunkTokens: deps.getHistorianChunkTokens?.() ?? 20_000,
             historyBudgetTokens,
             historianTimeoutMs: deps.historianTimeoutMs,
             compartmentDirectory,

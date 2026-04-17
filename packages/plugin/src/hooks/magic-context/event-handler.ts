@@ -69,7 +69,6 @@ export interface EventHandlerDeps {
         clear_reasoning_age?: number;
         execute_threshold_percentage?: number | { default: number; [modelKey: string]: number };
         cache_ttl: CacheTtlConfig;
-        modelContextLimitsCache?: Map<string, number>;
         commit_cluster_trigger?: { enabled: boolean; min_clusters: number };
     };
     tagger: Tagger;
@@ -262,9 +261,7 @@ export function createEventHandler(deps: EventHandlerDeps) {
                         (info.tokens?.input ?? 0) +
                         (info.tokens?.cache?.read ?? 0) +
                         (info.tokens?.cache?.write ?? 0);
-                    const contextLimit = resolveContextLimit(info.providerID, info.modelID, {
-                        modelContextLimitsCache: deps.config.modelContextLimitsCache,
-                    });
+                    const contextLimit = resolveContextLimit(info.providerID, info.modelID);
                     const percentage =
                         contextLimit > 0 ? (totalInputTokens / contextLimit) * 100 : 0;
 

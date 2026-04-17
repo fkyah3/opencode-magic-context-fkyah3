@@ -29,12 +29,8 @@ export function startTuiActionConsumer(args: {
     liveSessionState: LiveSessionState;
 }): (() => void) | undefined {
     const { client, directory, config, liveSessionState } = args;
-    const historianChunkTokens = deriveHistorianChunkTokens(
-        resolveHistorianContextLimit(
-            config.historian?.model,
-            (config as { modelContextLimitsCache?: Map<string, number> }).modelContextLimitsCache,
-        ),
-    );
+    // Re-derived on each enqueue-loop iteration below so config changes at
+    // runtime (e.g. historian model swap) take effect without restart.
     const getNotificationParams = (sessionId: string) =>
         getLiveNotificationParams(
             sessionId,
@@ -59,6 +55,11 @@ export function startTuiActionConsumer(args: {
                         variant: "info",
                         sessionId,
                     });
+
+                    // Derive fresh on each invocation (matches hook.ts and rpc-handlers.ts).
+                    const historianChunkTokens = deriveHistorianChunkTokens(
+                        resolveHistorianContextLimit(config.historian?.model),
+                    );
 
                     void executeContextRecomp({
                         client,
