@@ -2,6 +2,7 @@
 
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { realpathSync } from "node:fs";
 import { resolve as pathResolve, join } from "node:path";
 import { TestHarness } from "../src/harness";
 
@@ -12,18 +13,11 @@ import { TestHarness } from "../src/harness";
  * returned null and <session-history> was never built. Memories were therefore not
  * injected until historian published its first compartment.
  *
- * STATUS: currently failing. The seeded memory is verified present in context.db
- * with the correct project_path, and a hand-run of the plugin's own SQL returns
- * it. But session_meta.memory_block_count stays at 0 across turn 2 and the
- * <session-history> block never appears in the captured request body.
- *
- * Likely cause is that the code path querying memories in inject-compartments.ts
- * only fires under specific transform conditions we have not reproduced in the
- * test (low context usage / defer-only pass). Diagnosing this needs temporary
- * log statements inside the plugin or a closer look at transform.ts gating.
- *
- * Skipping for now so CI stays green. The harness itself is proven by smoke.test.ts
- * and the fast-main-vs-slow-historian test (to be added next).
+ * This test seeds a project-scoped memory directly in the plugin DB before any
+ * compartment exists, then drives a second turn and asserts that the request
+ * body reaching the model contains <session-history> with <project-memory>
+ * carrying our seeded directive — proving injection works even with zero
+ * compartments.
  */
 
 let h: TestHarness;
@@ -36,12 +30,26 @@ afterAll(async () => {
     await h.dispose();
 });
 
+/**
+ * Reproduce the plugin's `dir:<bun-hash>` project identity for a non-git temp dir.
+ *
+ * CRITICAL: OpenCode passes a realpath-resolved directory to the plugin via
+ * `hook.directory`. On macOS, `tmpdir()` returns a `/var/folders/...` path
+ * that is a symlink to `/private/var/folders/...`. We must `realpathSync` here
+ * so our computed hash matches what the plugin computes at runtime; otherwise
+ * the memory seed lands on a different `dir:<hash>` and the injection misses
+ * silently.
+ */
 function computeDirIdentity(directory: string): string {
-    const canonical = pathResolve(directory);
+    const canonical = realpathSync(pathResolve(directory));
     const hash = Bun.hash(canonical).toString(16).slice(0, 12);
     return `dir:${hash}`;
 }
 
+/**
+ * Seed a project-scoped memory row directly. We use a writable handle distinct
+ * from the harness's read-only cached handle.
+ */
 function seedMemory(h: TestHarness, projectIdentity: string, content: string): void {
     const dbPath = join(
         h.opencode.env.dataDir,
@@ -70,7 +78,7 @@ function seedMemory(h: TestHarness, projectIdentity: string, content: string): v
     }
 }
 
-describe.skip("memory injection", () => {
+describe("memory injection", () => {
     it("injects <project-memory> on first turn even with no compartments", async () => {
         h.mock.reset();
         h.mock.setDefault({
@@ -83,6 +91,8 @@ describe.skip("memory injection", () => {
             },
         });
 
+        // Turn 1 — bootstrap so the plugin creates context.db and writes the
+        // session_meta row. No memories seeded yet.
         const sessionId = await h.createSession();
         await h.sendPrompt(sessionId, "bootstrap turn");
         await h.waitFor(() => h.hasContextDb() && h.countTags(sessionId) > 0, {
@@ -90,6 +100,7 @@ describe.skip("memory injection", () => {
             label: "plugin initialized",
         });
 
+        // Seed one memory scoped to the workdir's project identity.
         const projectIdentity = computeDirIdentity(h.opencode.env.workdir);
         seedMemory(
             h,
@@ -97,6 +108,7 @@ describe.skip("memory injection", () => {
             "test seeded directive: always prefer bun over npm for running scripts",
         );
 
+        // Clear captured requests so the assertion targets only turn 2's payload.
         h.mock.reset();
         h.mock.setDefault({
             text: "ack 2",
@@ -110,10 +122,16 @@ describe.skip("memory injection", () => {
 
         await h.sendPrompt(sessionId, "second turn");
 
+        // Still no compartments at this point — we're testing the zero-compartment
+        // memory injection path specifically.
         expect(h.countCompartments(sessionId)).toBe(0);
 
         const req = h.mock.lastRequest();
         expect(req).not.toBeNull();
+
+        // The <session-history> block is prepended to the first user message in
+        // the visible array. Flatten everything and assert on the whole payload
+        // — this way the test survives cosmetic ordering changes.
         const fullBody = JSON.stringify(req!.body);
         expect(fullBody).toContain("<session-history>");
         expect(fullBody).toContain("<project-memory>");

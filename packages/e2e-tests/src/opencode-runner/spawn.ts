@@ -169,11 +169,16 @@ export async function spawnOpencode(opts: SpawnOptions): Promise<SpawnedOpencode
     // Explicitly strip any inherited OPENCODE_SERVER_PASSWORD from the parent shell —
     // our tests run unsecured on a random localhost port, and inherited auth would
     // force every SDK request to carry Basic auth headers we don't set.
+    // Also strip NODE_ENV=test: Bun's test runner sets it automatically and the
+    // plugin's logger (src/shared/logger.ts) silences all output when NODE_ENV=test.
+    // We want the subprocess to behave like a real install, so the log file gets
+    // populated normally for diagnostics.
     const childEnv: Record<string, string> = {};
     for (const [key, value] of Object.entries(process.env)) {
         if (value === undefined) continue;
         if (key === "OPENCODE_SERVER_PASSWORD") continue;
         if (key === "OPENCODE_SERVER_USERNAME") continue;
+        if (key === "NODE_ENV") continue;
         childEnv[key] = value;
     }
     childEnv.OPENCODE_CONFIG_DIR = env.configDir;
