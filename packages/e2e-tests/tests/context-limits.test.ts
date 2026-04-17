@@ -60,11 +60,12 @@ describe("context-limit resolution", () => {
             .get(sessionId) as { last_context_percentage: number } | null;
 
         const pct = row?.last_context_percentage ?? 0;
-        console.log(`[TEST] last_context_percentage = ${pct} (expected ~40 for 20K/50K)`);
+        console.log(`[TEST] last_context_percentage = ${pct} (expected exactly 40 for 20K/50K)`);
 
-        // 20_000 / 50_000 = 40%. Tolerate small drift from the exact value since
-        // the mock may add a handful of overhead tokens or the plugin may round.
-        expect(pct).toBeGreaterThanOrEqual(35);
-        expect(pct).toBeLessThanOrEqual(45);
+        // 20_000 input_tokens / 50_000 context_limit = exactly 40%. Mock returns
+        // exact usage and plugin rounds to 1 decimal; this must be 40.0.
+        // Tightened from the old 35-45 range (Finding #5 — the range was masking
+        // a real regression surface because ANY value in [35,45] passed).
+        expect(pct).toBe(40);
     }, 60_000);
 });

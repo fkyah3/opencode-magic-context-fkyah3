@@ -44,12 +44,20 @@ describe("e2e smoke", () => {
         const requests = h.mock.requests();
         expect(requests.length).toBeGreaterThanOrEqual(1);
 
-        // Request body carries our text.
+        // The assertion that matters is that the PLUGIN touched the outgoing
+        // request, not that the harness transported our text. Previously this
+        // check only looked for "hi there" in the body, which would pass even
+        // if the plugin was disabled. The magic-context system prompt is the
+        // one unambiguous plugin-produced artifact that should appear on every
+        // transform pass, so anchor the smoke here.
         const first = requests[0]!;
-        const messages = first.body.messages as Array<{ role: string; content: unknown }>;
-        expect(Array.isArray(messages)).toBe(true);
-        expect(messages.length).toBeGreaterThan(0);
-        expect(JSON.stringify(messages)).toContain("hi there");
+        const fullBody = JSON.stringify(first.body);
+        expect(fullBody).toContain("hi there");
+        // Magic-context injects a system-prompt block describing its tools and
+        // guidance. This exact phrase comes from
+        // packages/plugin/src/agents/magic-context-prompt.ts and is stable
+        // across the default agent-prompt variants.
+        expect(fullBody).toContain("Magic Context");
 
         // Plugin created its DB and ran the transform (at least one tag persisted).
         await h.waitFor(() => h.hasContextDb(), { timeoutMs: 5000, label: "context.db created" });

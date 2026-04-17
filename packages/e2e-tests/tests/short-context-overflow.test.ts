@@ -120,6 +120,7 @@ describe("short context accumulating overflow", () => {
 
             const sessionId = await h.createSession();
             const turnUsage: number[] = [];
+            const turnErrors: Array<{ turn: number; error: string }> = [];
             const TURNS = 30;
             for (let i = 1; i <= TURNS; i++) {
                 const reqBefore = h.mock.requests().length;
@@ -127,8 +128,15 @@ describe("short context accumulating overflow", () => {
                     await h.sendPrompt(sessionId, `user turn ${i}: continue.`, {
                         timeoutMs: 60_000,
                     });
-                } catch {
-                    // overflow would throw — should not happen with the fix
+                } catch (err) {
+                    // Track so the test fails if overflow (or any other failure)
+                    // kills a turn — previously we silently swallowed this, which
+                    // made the test unable to detect the very regression it claims
+                    // to guard against.
+                    turnErrors.push({
+                        turn: i,
+                        error: err instanceof Error ? err.message : String(err),
+                    });
                 }
                 const reqs = h.mock.requests().slice(reqBefore);
                 const mainReq = reqs.find((r) => !isHistorian(r.body));
@@ -140,6 +148,20 @@ describe("short context accumulating overflow", () => {
             const finalPct = turnUsage[turnUsage.length - 1] ?? 0;
             console.log(`[OVERFLOW-GUARD] peak: ${peakObservedPct}% final: ${finalPct}% of 128K`);
             console.log(`[OVERFLOW-GUARD] per-turn %: ${turnUsage.join(", ")}`);
+            if (turnErrors.length > 0) {
+                console.log(
+                    `[OVERFLOW-GUARD] prompt failures (${turnErrors.length}):`,
+                    turnErrors
+                        .map((e) => `turn ${e.turn}: ${e.error.slice(0, 100)}`)
+                        .join(" | "),
+                );
+            }
+
+            // The overflow guard is meaningless if prompts were allowed to fail
+            // silently. Require all 30 turns to succeed. If this assertion fires,
+            // inspect `turnErrors` in the log above to see which turn(s) overflowed
+            // or timed out.
+            expect(turnErrors).toEqual([]);
 
             // Verify drops actually materialized in the DB — this is the core
             // fix: pending ops apply even when compartmentRunning at emergency.

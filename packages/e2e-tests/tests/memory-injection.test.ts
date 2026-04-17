@@ -5,6 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { realpathSync } from "node:fs";
 import { resolve as pathResolve, join } from "node:path";
 import { TestHarness } from "../src/harness";
+// Use the production identity + hash helpers so this test is not coupled to
+// Bun.hash's specific (version-dependent) output. The plugin computes the same
+// identity and normalized hash internally; importing the helpers here keeps the
+// test aligned with whatever the plugin does at runtime.
+import { resolveProjectIdentity } from "../../plugin/src/features/magic-context/memory/project-identity";
+import { computeNormalizedHash } from "../../plugin/src/features/magic-context/memory/normalize-hash";
 
 /**
  * Memory injection — regression test for v0.9.1.
@@ -31,19 +37,21 @@ afterAll(async () => {
 });
 
 /**
- * Reproduce the plugin's `dir:<bun-hash>` project identity for a non-git temp dir.
+ * Compute the same project identity the plugin will resolve at runtime.
  *
  * CRITICAL: OpenCode passes a realpath-resolved directory to the plugin via
  * `hook.directory`. On macOS, `tmpdir()` returns a `/var/folders/...` path
  * that is a symlink to `/private/var/folders/...`. We must `realpathSync` here
- * so our computed hash matches what the plugin computes at runtime; otherwise
- * the memory seed lands on a different `dir:<hash>` and the injection misses
- * silently.
+ * so our call to `resolveProjectIdentity` matches what the plugin computes at
+ * runtime; otherwise the memory seed lands on a different identity and the
+ * injection misses silently.
+ *
+ * Delegates to the production `resolveProjectIdentity` so the test stays in
+ * lockstep with the plugin's identity format and hash scheme (whatever they
+ * happen to be at any given commit).
  */
 function computeDirIdentity(directory: string): string {
-    const canonical = realpathSync(pathResolve(directory));
-    const hash = Bun.hash(canonical).toString(16).slice(0, 12);
-    return `dir:${hash}`;
+    return resolveProjectIdentity(realpathSync(pathResolve(directory)));
 }
 
 /**
@@ -62,8 +70,10 @@ function seedMemory(h: TestHarness, projectIdentity: string, content: string): v
     const db = new Database(dbPath);
     try {
         const now = Date.now();
-        const normalized = content.trim().toLowerCase();
-        const normalizedHash = Bun.hash(normalized).toString();
+        // Use the production hash helper so this matches the value the plugin
+        // stores when it promotes a memory. Plugin uses Bun.CryptoHasher("md5"),
+        // which is stable across Bun versions (unlike Bun.hash).
+        const normalizedHash = computeNormalizedHash(content);
         db.prepare(
             `INSERT INTO memories (
                 project_path, category, content, normalized_hash,

@@ -247,7 +247,18 @@ export async function runDoctor(
             const mcConfig = parse(mcRaw) as Record<string, unknown>;
             let mcChanged = false;
 
-            // Migrate experimental.compaction_markers → top-level compaction_markers
+            // Migrate experimental.compaction_markers → top-level compaction_markers.
+            //
+            // Intentional: comment-json stores comments on hidden Symbol keys
+            // attached to the parent object via their associated key. Deleting
+            // a key also drops its "before-property" comment. To minimize
+            // comment loss, we:
+            //   1. Do not delete the `experimental` object even when it becomes
+            //      empty — its header comment is anchored there.
+            //   2. Accept that the comment immediately preceding
+            //      `compaction_markers` is lost on delete; it refers to a
+            //      feature that is no longer experimental, so the comment
+            //      would be stale anyway.
             const experimental = mcConfig.experimental as Record<string, unknown> | undefined;
             if (experimental && "compaction_markers" in experimental) {
                 if (!("compaction_markers" in mcConfig)) {
@@ -256,10 +267,6 @@ export async function runDoctor(
                 }
                 delete experimental.compaction_markers;
                 mcChanged = true;
-                // Clean up empty experimental object
-                if (Object.keys(experimental).length === 0) {
-                    delete mcConfig.experimental;
-                }
                 log.success(
                     "Migrated experimental.compaction_markers → compaction_markers (now default: true)",
                 );

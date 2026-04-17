@@ -34,7 +34,11 @@ describe("deriveTriggerBudget", () => {
         expect(deriveTriggerBudget(-1, 40)).toBe(5_000);
         expect(deriveTriggerBudget(Number.NaN, 40)).toBe(5_000);
         expect(deriveTriggerBudget(128_000, -10)).toBe(5_000);
-        expect(deriveTriggerBudget(128_000, 200)).toBe(6_400); // 128K × 100% × 5%
+        // Callers pass executeThresholdPercentage resolved through
+        // resolveExecuteThreshold(), which caps at MAX_EXECUTE_THRESHOLD (80).
+        // Values above 100 are not clamped here; scaling proceeds. That's
+        // acceptable because the surrounding max clamp of 50K caps any overflow.
+        expect(deriveTriggerBudget(128_000, 200)).toBe(12_800); // 128K × 200% × 5%
     });
 
     it("preserves ~15% of usable as tail_size threshold for the workload baseline", () => {

@@ -169,19 +169,71 @@ describe("slow historian vs fast main", () => {
                 },
             });
 
-            const t0 = Date.now();
-            await h.sendPrompt(
+            // INVARIANT 1 (non-blocking): turn 12's MAIN request must be
+            // issued to the mock before the slow historian request finishes.
+            //
+            // Previously this was a wall-clock assertion
+            // (turn12Latency < MAIN_LATENCY_BUDGET_MS). That was flaky under
+            // CI load and — more importantly — wasn't actually testing the
+            // non-blocking invariant. A GC pause, cold Bun startup, or slow
+            // opencode boot could fail it even with the plugin behaving
+            // correctly, and a 4s delay that's still "blocking" could pass.
+            //
+            // The invariant that actually matters is REQUEST ORDERING: the
+            // main-turn-12 request should reach the mock while the historian
+            // request kicked off by turn 11's trigger is still in-flight
+            // (holding its 8s delay). If main was blocked on historian, the
+            // historian response would arrive first.
+            const historianReqCountBeforeT12 = h.mock
+                .requests()
+                .filter((r) => isHistorianRequest(r.body)).length;
+
+            // Start turn 12 but do NOT await — we want to observe the request
+            // arriving at the mock before it completes.
+            const turn12Promise = h.sendPrompt(
                 sessionId,
                 "turn 12: should be fast even with historian running.",
             );
-            const turn12Latency = Date.now() - t0;
+
+            // Wait for the main-turn-12 request to appear at the mock. If main
+            // was blocked on historian, this would never happen until historian's
+            // 8s delay elapsed — we set a 3s ceiling so we can prove
+            // non-blocking behavior without relying on walltime variance.
+            const t0 = Date.now();
+            await h.waitFor(
+                () => {
+                    const reqs = h.mock.requests();
+                    const mainT12 = reqs.find(
+                        (r) =>
+                            !isHistorianRequest(r.body) &&
+                            JSON.stringify(r.body).includes("turn 12:"),
+                    );
+                    return mainT12 != null;
+                },
+                { timeoutMs: 3_000, label: "main turn 12 request arrives at mock" },
+            );
+            const t12RequestArrivedAfterMs = Date.now() - t0;
 
             console.log(
-                `[TEST] turn 12 latency: ${turn12Latency}ms (budget ${MAIN_LATENCY_BUDGET_MS}ms)`,
+                `[TEST] main turn 12 request arrived at mock after ${t12RequestArrivedAfterMs}ms ` +
+                    `(historian has ${HISTORIAN_DELAY_MS}ms delay)`,
             );
 
-            // INVARIANT 1: main did NOT block on slow historian (8s delay).
-            expect(turn12Latency).toBeLessThan(MAIN_LATENCY_BUDGET_MS);
+            // Main-turn-12 request arrived well before the 8s historian delay
+            // would have unblocked — that's the non-blocking proof.
+            expect(t12RequestArrivedAfterMs).toBeLessThan(HISTORIAN_DELAY_MS - 2_000);
+
+            // Historian is still in-flight at this moment. If the plugin had
+            // blocked, historian would have completed before turn 12's request
+            // reached the mock, and the completed-count would match. We only
+            // drain this assertion as sanity; the real check is above.
+            const historianReqCountAtT12 = h.mock
+                .requests()
+                .filter((r) => isHistorianRequest(r.body)).length;
+            expect(historianReqCountAtT12).toBe(historianReqCountBeforeT12);
+
+            // Now finish turn 12 and drive further turns for INVARIANT 2.
+            await turn12Promise;
 
             // INVARIANT 2: only one historian request, despite multiple further
             // main turns while the first historian run is still pending.
@@ -199,6 +251,9 @@ describe("slow historian vs fast main", () => {
             // INVARIANT 3: at least one historian request was captured.
             // Implied by INVARIANT 2 equality to 1, kept explicit for clarity.
             expect(historianRequests.length).toBeGreaterThanOrEqual(1);
+            // Silence unused-constant warning: MAIN_LATENCY_BUDGET_MS is kept
+            // for context in the comment above.
+            void MAIN_LATENCY_BUDGET_MS;
         },
         120_000,
     );

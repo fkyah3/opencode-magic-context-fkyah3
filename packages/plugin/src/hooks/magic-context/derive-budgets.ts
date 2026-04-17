@@ -52,7 +52,11 @@ export function deriveTriggerBudget(
     if (!Number.isFinite(mainContextLimit) || mainContextLimit <= 0) {
         return TRIGGER_BUDGET_MIN;
     }
-    const thresholdFraction = Math.max(0, Math.min(executeThresholdPercentage, 100)) / 100;
+    // Callers resolve executeThresholdPercentage through resolveExecuteThreshold(),
+    // which caps at MAX_EXECUTE_THRESHOLD (80). We still guard against negative
+    // inputs so derived budgets never go upside-down, but the upper clamp is
+    // not needed and was dead defensively.
+    const thresholdFraction = Math.max(0, executeThresholdPercentage) / 100;
     const usable = mainContextLimit * thresholdFraction;
     const derived = Math.round(usable * TRIGGER_BUDGET_PERCENTAGE);
     return Math.max(TRIGGER_BUDGET_MIN, Math.min(TRIGGER_BUDGET_MAX, derived));
