@@ -1,6 +1,8 @@
+import { log, sessionLog } from "../../shared/logger";
 import { getModelsDevContextLimit } from "../../shared/models-dev-cache";
 
 const DEFAULT_CONTEXT_LIMIT = 128_000;
+const MAX_EXECUTE_THRESHOLD = 80;
 
 type CacheTtlConfig = string | Record<string, string>;
 
@@ -46,6 +48,48 @@ export function resolveCacheTtl(cacheTtl: CacheTtlConfig, modelKey: string | und
 }
 
 type ExecuteThresholdConfig = number | { default: number; [modelKey: string]: number };
+type ExecuteThresholdTokensConfig =
+    | { default?: number; [modelKey: string]: number | undefined }
+    | undefined;
+
+export interface ExecuteThresholdOptions {
+    /** Optional tokens-based threshold config. When matched for the given modelKey,
+     *  overrides the percentage-based threshold. */
+    tokensConfig?: ExecuteThresholdTokensConfig;
+    /** Required when `tokensConfig` is provided — used to convert tokens → percentage
+     *  and to clamp values above 80% × context_limit. */
+    contextLimit?: number;
+    /** Session ID for warn logs when clamping. If absent, warns to global log. */
+    sessionId?: string;
+}
+
+export type ExecuteThresholdMode = "percentage" | "tokens";
+
+export interface ExecuteThresholdDetail {
+    /** Effective execute threshold as a percentage (0–80). Downstream math keys off this. */
+    percentage: number;
+    /** Which source was authoritative: tokens config (when matched + valid context) or percentage. */
+    mode: ExecuteThresholdMode;
+    /** When mode is "tokens", the absolute token value after clamping (≤ 80% × contextLimit). */
+    absoluteTokens?: number;
+    /** The config key that matched, if any (for display/debugging). `"default"` when default fallback. */
+    matchedKey?: string;
+}
+
+// Module-level dedupe for clamp warnings. Key: `${sessionId}|${modelKey}|${tokenVal}|${cap}`.
+// The hot transform path may call resolveExecuteThreshold many times per second; without dedupe
+// an over-cap token config would spam the log file continuously until the user fixes it.
+const clampWarnSeen = new Set<string>();
+
+/**
+ * Return true iff `v` is a finite positive number. Schema normally forbids junk values, but
+ * runtime callers may derive contextLimit from `inputTokens / (percentage/100)` (NaN when
+ * percentage is 0) or accept externally-mutated configs. Guarding here keeps resolver
+ * output deterministic and within bounds.
+ */
+function isFinitePositive(v: unknown): v is number {
+    return typeof v === "number" && Number.isFinite(v) && v > 0;
+}
 
 /**
  * Yield progressively-less-specific lookup keys for a given `provider/model`.
@@ -76,13 +120,60 @@ function* modelKeyLookupOrder(modelKey: string): Generator<string> {
     }
 }
 
-export function resolveExecuteThreshold(
+/**
+ * Single source of truth for execute-threshold resolution. Returns the effective
+ * percentage plus which config source was authoritative. Callers that only need
+ * the percentage can use `resolveExecuteThreshold` (thin wrapper below); callers
+ * that surface the mode to users (`/ctx-status`, TUI, RPC) must use this directly
+ * to avoid the "progressive lookup drift" bug where two call sites disagree on
+ * whether tokens mode is active.
+ */
+export function resolveExecuteThresholdDetail(
     config: ExecuteThresholdConfig,
     modelKey: string | undefined,
     fallback: number,
-): number {
-    const MAX_EXECUTE_THRESHOLD = 80;
+    options?: ExecuteThresholdOptions,
+): ExecuteThresholdDetail {
+    // 1. Tokens-based resolution takes precedence when configured. Token values
+    //    only make sense against a known context_limit — callers must supply it.
+    //    Guard: tokensConfig must exist, contextLimit must be finite + positive.
+    //    Junk values (NaN, negatives, zero) silently fall through to percentage;
+    //    zod normally blocks them at config-load but runtime derivations (e.g.
+    //    inputTokens/percentage) can produce NaN that must not poison the resolver.
+    if (options?.tokensConfig && isFinitePositive(options.contextLimit)) {
+        const contextLimit = options.contextLimit;
+        const tokenMatch = resolveTokensMatchWithKey(options.tokensConfig, modelKey);
+        // Also guard the matched token value — must be a finite positive number.
+        if (tokenMatch && isFinitePositive(tokenMatch.value)) {
+            const cap = contextLimit * (MAX_EXECUTE_THRESHOLD / 100);
+            const effectiveTokens = Math.min(tokenMatch.value, cap);
+            if (effectiveTokens < tokenMatch.value) {
+                // Dedupe: only warn once per (session, modelKey, token value, cap) tuple.
+                // The hot transform path would otherwise spam the log until the user fixes config.
+                const dedupeKey = `${options.sessionId ?? "__global__"}|${modelKey ?? "__default__"}|${tokenMatch.value}|${cap}`;
+                if (!clampWarnSeen.has(dedupeKey)) {
+                    clampWarnSeen.add(dedupeKey);
+                    const msg = `execute_threshold_tokens clamped: ${tokenMatch.value} → ${effectiveTokens} (80% of ${contextLimit}) for ${modelKey ?? "default"}`;
+                    if (options.sessionId) {
+                        sessionLog(options.sessionId, `WARN: ${msg}`);
+                    } else {
+                        log(`[magic-context] WARN: ${msg}`);
+                    }
+                }
+            }
+            const percentage = (effectiveTokens / contextLimit) * 100;
+            return {
+                percentage: Math.min(percentage, MAX_EXECUTE_THRESHOLD),
+                mode: "tokens",
+                absoluteTokens: Math.floor(effectiveTokens),
+                matchedKey: tokenMatch.matchedKey,
+            };
+        }
+    }
+
+    // 2. Fall through to percentage-based resolution.
     let resolved: number;
+    let matchedKey: string | undefined;
 
     if (typeof config === "number") {
         resolved = config;
@@ -91,18 +182,74 @@ export function resolveExecuteThreshold(
         for (const candidate of modelKeyLookupOrder(modelKey)) {
             if (typeof config[candidate] === "number") {
                 matched = config[candidate];
+                matchedKey = candidate;
                 break;
             }
         }
-        resolved = matched ?? config.default ?? fallback;
+        if (matched === undefined && typeof config.default === "number") {
+            resolved = config.default;
+            matchedKey = "default";
+        } else {
+            resolved = matched ?? fallback;
+        }
+    } else if (typeof config.default === "number") {
+        resolved = config.default;
+        matchedKey = "default";
     } else {
-        resolved = config.default ?? fallback;
+        resolved = fallback;
+    }
+
+    // Guard against non-finite/negative config values that could bypass schema.
+    if (!Number.isFinite(resolved) || resolved < 0) {
+        resolved = fallback;
     }
 
     // Cap at 80% — higher values create a gap between execute_threshold and
     // forceMaterialization (85%) where shouldRunHeuristics fires on defer
     // passes without isCacheBustingPass, causing unguarded cache busts.
-    return Math.min(resolved, MAX_EXECUTE_THRESHOLD);
+    return {
+        percentage: Math.min(resolved, MAX_EXECUTE_THRESHOLD),
+        mode: "percentage",
+        matchedKey,
+    };
+}
+
+/**
+ * Backward-compatible wrapper around `resolveExecuteThresholdDetail`.
+ * Use the detail version when you also need the mode or absolute token value.
+ */
+export function resolveExecuteThreshold(
+    config: ExecuteThresholdConfig,
+    modelKey: string | undefined,
+    fallback: number,
+    options?: ExecuteThresholdOptions,
+): number {
+    return resolveExecuteThresholdDetail(config, modelKey, fallback, options).percentage;
+}
+
+// Variant of resolveTokensMatch that also returns which key matched, for mode display.
+function resolveTokensMatchWithKey(
+    tokensConfig: ExecuteThresholdTokensConfig,
+    modelKey: string | undefined,
+): { value: number; matchedKey: string } | undefined {
+    if (!tokensConfig) {
+        return undefined;
+    }
+
+    if (modelKey) {
+        for (const candidate of modelKeyLookupOrder(modelKey)) {
+            const value = tokensConfig[candidate];
+            if (typeof value === "number") {
+                return { value, matchedKey: candidate };
+            }
+        }
+    }
+
+    if (typeof tokensConfig.default === "number") {
+        return { value: tokensConfig.default, matchedKey: "default" };
+    }
+
+    return undefined;
 }
 
 export function resolveModelKey(

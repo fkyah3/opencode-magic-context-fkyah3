@@ -6,6 +6,7 @@ import type { Database } from "bun:sqlite";
 import type { MagicContextConfig } from "../config/schema/magic-context";
 import { resolveProjectIdentity } from "../features/magic-context/memory/project-identity";
 import { openDatabase } from "../features/magic-context/storage";
+import { resolveExecuteThresholdDetail } from "../hooks/magic-context/event-resolvers";
 import { getLiveNotificationParams } from "../hooks/magic-context/hook-handlers";
 import type { LiveSessionState } from "../hooks/magic-context/live-session-state";
 import { estimateTokens } from "../hooks/magic-context/read-session-formatting";
@@ -305,6 +306,7 @@ function buildStatusDetail(
         cacheRemainingMs: 0,
         cacheExpired: false,
         executeThreshold: 65,
+        executeThresholdMode: "percentage",
         protectedTagCount: 20,
         nudgeInterval: 20000,
         historyBudgetPercentage: 0.15,
@@ -363,15 +365,34 @@ function buildStatusDetail(
             // pending_ops may not exist
         }
 
+        // Derived context limit needed for tokens-based threshold resolution.
+        const contextLimitForTokens =
+            base.usagePercentage > 0
+                ? Math.round(base.inputTokens / (base.usagePercentage / 100))
+                : 0;
+
         // Config values (resolve per-model)
         if (config) {
-            const etp = resolveConfigValue<number>(
-                config,
-                "execute_threshold_percentage",
-                modelKey,
-                65,
-            );
-            detail.executeThreshold = Math.min(etp, 80);
+            const pctCfg = config.execute_threshold_percentage as
+                | number
+                | { default: number; [k: string]: number }
+                | undefined;
+            const tokensCfg = config.execute_threshold_tokens as
+                | { default?: number; [k: string]: number | undefined }
+                | undefined;
+            // Use the detail resolver so we can surface mode + absolute tokens
+            // consistently with /ctx-status. Avoids the "progressive lookup drift"
+            // where RPC and status-text disagreed on whether tokens mode was active.
+            const thresholdDetail = resolveExecuteThresholdDetail(pctCfg ?? 65, modelKey, 65, {
+                tokensConfig: tokensCfg,
+                contextLimit: contextLimitForTokens || undefined,
+                sessionId,
+            });
+            detail.executeThreshold = thresholdDetail.percentage;
+            detail.executeThresholdMode = thresholdDetail.mode;
+            if (thresholdDetail.absoluteTokens !== undefined) {
+                detail.executeThresholdTokens = thresholdDetail.absoluteTokens;
+            }
 
             const ct = resolveConfigValue<string>(config, "cache_ttl", modelKey, "5m");
             detail.cacheTtl = ct;

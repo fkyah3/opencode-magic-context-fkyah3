@@ -112,6 +112,10 @@ export interface MagicContextConfig {
     cache_ttl: string | { default: string; [modelKey: string]: string };
     nudge_interval_tokens: number;
     execute_threshold_percentage: number | { default: number; [modelKey: string]: number };
+    /** Absolute token thresholds per model. When set for a given model (or via `default`),
+     *  this overrides `execute_threshold_percentage` for that model. Useful for hard caps
+     *  matching provider input limits. Values above 80% × context_limit are clamped with a warning. */
+    execute_threshold_tokens?: { default?: number; [modelKey: string]: number | undefined };
     protected_tags: number;
     auto_drop_tool_age: number;
     drop_tool_structure: boolean;
@@ -165,15 +169,24 @@ export const MagicContextConfigSchema = z
             .default("5m"),
         /** Minimum token growth between low-priority rolling nudges (default: DEFAULT_NUDGE_INTERVAL_TOKENS) */
         nudge_interval_tokens: z.number().min(1000).default(DEFAULT_NUDGE_INTERVAL_TOKENS),
-        /** Context percentage that forces queued operations to execute. Number or per-model object ({ default: 65, "provider/model": 45 }). Default: DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE */
+        /** Context percentage that forces queued operations to execute. Number or per-model object ({ default: 65, "provider/model": 45 }). Values above 80 are rejected because the runtime caps at 80% for cache safety (MAX_EXECUTE_THRESHOLD). Default: DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE */
         execute_threshold_percentage: z
             .union([
-                z.number().min(20).max(95),
+                z.number().min(20).max(80),
                 z
-                    .object({ default: z.number().min(20).max(95) })
-                    .catchall(z.number().min(20).max(95)),
+                    .object({ default: z.number().min(20).max(80) })
+                    .catchall(z.number().min(20).max(80)),
             ])
             .default(DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE),
+        /** Absolute token thresholds per model. When matched, overrides execute_threshold_percentage
+         *  for that model. Accepts `default` for all models or per-model keys. Values above
+         *  80% × context_limit are clamped with a warning log. Min 5_000, max 2_000_000. */
+        execute_threshold_tokens: z
+            .object({
+                default: z.number().min(5_000).max(2_000_000).optional(),
+            })
+            .catchall(z.number().min(5_000).max(2_000_000))
+            .optional(),
         /** Number of recent tags to protect from dropping (min: 1, max: 100, default: 20) */
         protected_tags: z.number().min(1).max(100).optional(),
         /** Auto-drop tool outputs older than N tags during queue execution (default: 100) */

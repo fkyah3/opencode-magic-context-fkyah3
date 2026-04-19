@@ -155,6 +155,7 @@ export interface TransformDeps {
     getHistorianChunkTokens?: () => number;
     historyBudgetPercentage?: number;
     executeThresholdPercentage?: number | { default: number; [modelKey: string]: number };
+    executeThresholdTokens?: { default?: number; [modelKey: string]: number | undefined };
     historianTimeoutMs?: number;
     getNotificationParams?: (
         sessionId: string,
@@ -298,6 +299,7 @@ export function createTransform(deps: TransformDeps) {
             contextUsageEarly,
             deps.executeThresholdPercentage,
             deps.getModelKey?.(sessionId),
+            deps.executeThresholdTokens,
         );
         const schedulerDecisionEarly = resolveSchedulerDecision(
             deps.scheduler,
@@ -839,14 +841,20 @@ function resolveHistoryBudgetTokens(
         | { default: number; [modelKey: string]: number }
         | undefined,
     modelKey: string | undefined,
+    executeThresholdTokens?: { default?: number; [modelKey: string]: number | undefined },
 ): number | undefined {
     if (!historyBudgetPercentage || contextUsage.percentage <= 0) {
         return undefined;
     }
 
+    const derivedContextLimit = contextUsage.inputTokens / (contextUsage.percentage / 100);
     return Math.floor(
-        (contextUsage.inputTokens / (contextUsage.percentage / 100)) *
-            (resolveExecuteThreshold(executeThresholdPercentage ?? 65, modelKey, 65) / 100) *
+        derivedContextLimit *
+            (resolveExecuteThreshold(executeThresholdPercentage ?? 65, modelKey, 65, {
+                tokensConfig: executeThresholdTokens,
+                contextLimit: derivedContextLimit,
+            }) /
+                100) *
             historyBudgetPercentage,
     );
 }

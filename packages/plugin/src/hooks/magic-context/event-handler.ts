@@ -68,6 +68,7 @@ export interface EventHandlerDeps {
         drop_tool_structure?: boolean;
         clear_reasoning_age?: number;
         execute_threshold_percentage?: number | { default: number; [modelKey: string]: number };
+        execute_threshold_tokens?: { default?: number; [modelKey: string]: number | undefined };
         cache_ttl: CacheTtlConfig;
         commit_cluster_trigger?: { enabled: boolean; min_clusters: number };
     };
@@ -308,6 +309,11 @@ export function createEventHandler(deps: EventHandlerDeps) {
                             deps.config.execute_threshold_percentage ?? 65,
                             modelKey,
                             65,
+                            {
+                                tokensConfig: deps.config.execute_threshold_tokens,
+                                contextLimit,
+                                sessionId: info.sessionID,
+                            },
                         );
                         // Derive trigger_budget from the MAIN model's usable working
                         // space (contextLimit × executeThreshold). This drives the

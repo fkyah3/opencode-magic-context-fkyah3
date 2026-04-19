@@ -27,7 +27,7 @@ import { log } from "../../shared/logger";
 import { createMagicContextCommandHandler } from "./command-handler";
 import { deriveHistorianChunkTokens, resolveHistorianContextLimit } from "./derive-budgets";
 import { createEventHandler } from "./event-handler";
-import { resolveModelKey } from "./event-resolvers";
+import { resolveContextLimit, resolveModelKey } from "./event-resolvers";
 import { clearInjectionCache } from "./inject-compartments";
 import { createNudger } from "./nudger";
 import { createTextCompleteHandler } from "./text-complete";
@@ -68,6 +68,7 @@ export interface MagicContextDeps {
         clear_reasoning_age?: number;
         iteration_nudge_threshold?: number;
         execute_threshold_percentage?: number | { default: number; [modelKey: string]: number };
+        execute_threshold_tokens?: { default?: number; [modelKey: string]: number | undefined };
         cache_ttl: string | Record<string, string>;
 
         historian?: z.infer<typeof AgentOverrideConfigSchema>;
@@ -208,6 +209,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         getHistorianChunkTokens,
         historyBudgetPercentage: deps.config.history_budget_percentage,
         executeThresholdPercentage: deps.config.execute_threshold_percentage,
+        executeThresholdTokens: deps.config.execute_threshold_tokens,
         historianTimeoutMs: deps.config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
         getNotificationParams: (sessionId) =>
             getLiveNotificationParams(
@@ -291,11 +293,17 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         protectedTags: deps.config.protected_tags,
         nudgeIntervalTokens: deps.config.nudge_interval_tokens ?? DEFAULT_NUDGE_INTERVAL_TOKENS,
         executeThresholdPercentage: deps.config.execute_threshold_percentage ?? 65,
+        executeThresholdTokens: deps.config.execute_threshold_tokens,
         historyBudgetPercentage: deps.config.history_budget_percentage,
         commitClusterTrigger: deps.config.commit_cluster_trigger,
         getLiveModelKey: (sessionId) => {
             const model = liveModelBySession.get(sessionId);
             return model ? `${model.providerID}/${model.modelID}` : undefined;
+        },
+        getContextLimit: (sessionId) => {
+            const model = liveModelBySession.get(sessionId);
+            if (!model) return undefined;
+            return resolveContextLimit(model.providerID, model.modelID);
         },
         onFlush: (sessionId) => flushedSessions.add(sessionId),
         executeRecomp: async (sessionId) =>

@@ -204,9 +204,12 @@ export function createMagicContextCommandHandler(deps: {
     protectedTags: number;
     nudgeIntervalTokens?: number;
     executeThresholdPercentage?: number | { default: number; [modelKey: string]: number };
+    executeThresholdTokens?: { default?: number; [modelKey: string]: number | undefined };
     historyBudgetPercentage?: number;
     commitClusterTrigger?: { enabled: boolean; min_clusters: number };
     getLiveModelKey?: (sessionId: string) => string | undefined;
+    /** Optional live context limit resolver — used for tokens-based threshold display. */
+    getContextLimit?: (sessionId: string) => number | undefined;
     onFlush?: (sessionId: string) => void;
     executeRecomp?: (sessionId: string) => Promise<string>;
     sendNotification: (
@@ -282,6 +285,7 @@ export function createMagicContextCommandHandler(deps: {
                     throwSentinel(input.command);
                 }
                 const liveModelKey = deps.getLiveModelKey?.(sessionId);
+                const liveContextLimit = deps.getContextLimit?.(sessionId);
                 const statusOutput = executeStatus(
                     deps.db,
                     sessionId,
@@ -291,6 +295,8 @@ export function createMagicContextCommandHandler(deps: {
                     liveModelKey,
                     deps.historyBudgetPercentage,
                     deps.commitClusterTrigger,
+                    deps.executeThresholdTokens,
+                    liveContextLimit,
                 );
                 result += result ? `\n\n${statusOutput}` : statusOutput;
             }

@@ -14,6 +14,11 @@ interface PerModelFieldProps {
   sliderConfig?: { min: number; max: number; step: number; suffix: string; defaultValue: number };
   /** Default value placeholder */
   defaultPlaceholder: string;
+  /** When true, emit { default, ...overrides } object even when only default is set.
+   *  Required for fields whose schema forbids a bare-scalar form (e.g. execute_threshold_tokens). */
+  alwaysObject?: boolean;
+  /** When set, text input values are coerced to numbers on save (blank → undefined). */
+  numericText?: boolean;
 }
 
 /**
@@ -42,22 +47,39 @@ export default function PerModelField(props: PerModelFieldProps) {
 
   const hasOverrides = () => Object.keys(normalized().overrides).length > 0;
 
-  // Build the full config value from default + overrides
-  const buildValue = (defaultVal: string | number | undefined, overrides: Record<string, string | number>) => {
-    if (Object.keys(overrides).length === 0) {
-      return defaultVal;
+  // Coerce text inputs to numbers when numericText is set. Blank → undefined.
+  const coerce = (val: string | number | undefined): string | number | undefined => {
+    if (val === undefined || val === "") return undefined;
+    if (props.numericText && typeof val === "string") {
+      const n = Number(val);
+      return Number.isFinite(n) ? n : val;
     }
+    return val;
+  };
+
+  // Build the full config value from default + overrides.
+  // When alwaysObject is true (schema forbids bare scalar), always emit object shape,
+  // omitting undefined default so { "model": N } stays valid.
+  const buildValue = (defaultVal: string | number | undefined, overrides: Record<string, string | number>) => {
+    const hasDefault = defaultVal !== undefined && defaultVal !== "";
+    if (props.alwaysObject) {
+      if (!hasDefault && Object.keys(overrides).length === 0) return undefined;
+      return hasDefault ? { default: defaultVal, ...overrides } : { ...overrides };
+    }
+    if (Object.keys(overrides).length === 0) return defaultVal;
     return { default: defaultVal, ...overrides };
   };
 
   const setDefault = (val: string | number | undefined) => {
     const { overrides } = normalized();
-    props.onChange(buildValue(val, overrides));
+    props.onChange(buildValue(coerce(val), overrides));
   };
 
   const setOverride = (model: string, val: string | number) => {
     const { defaultVal, overrides } = normalized();
-    props.onChange(buildValue(defaultVal, { ...overrides, [model]: val }));
+    const coerced = coerce(val);
+    if (coerced === undefined) return;
+    props.onChange(buildValue(defaultVal, { ...overrides, [model]: coerced }));
   };
 
   const removeOverride = (model: string) => {
@@ -68,9 +90,22 @@ export default function PerModelField(props: PerModelFieldProps) {
 
   const addOverride = (model: string) => {
     const { defaultVal, overrides } = normalized();
-    const defVal = props.inputType === "slider"
-      ? (props.sliderConfig?.defaultValue ?? 65)
-      : (defaultVal ?? props.defaultPlaceholder);
+    let defVal: string | number;
+    if (props.inputType === "slider") {
+      defVal = props.sliderConfig?.defaultValue ?? 65;
+    } else if (props.numericText) {
+      // For numeric text inputs (e.g. execute_threshold_tokens) seed a safe numeric value.
+      // Prefer the current default if numeric; else use the placeholder if parseable; else 0.
+      const asNum = typeof defaultVal === "number" ? defaultVal : Number(defaultVal);
+      if (Number.isFinite(asNum) && asNum > 0) {
+        defVal = asNum;
+      } else {
+        const phNum = Number(props.defaultPlaceholder);
+        defVal = Number.isFinite(phNum) && phNum > 0 ? phNum : 0;
+      }
+    } else {
+      defVal = defaultVal ?? props.defaultPlaceholder;
+    }
     props.onChange(buildValue(defaultVal, { ...overrides, [model]: defVal }));
     setAddingModel(false);
   };

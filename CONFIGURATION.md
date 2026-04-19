@@ -65,11 +65,13 @@ Higher-tier models with longer cache windows benefit from a longer TTL. Setting 
 | `protected_tags` | `number` (1–100) | `20` | Last N active tags immune from immediate dropping. |
 | `nudge_interval_tokens` | `number` | `10000` | Minimum token growth between rolling nudges. |
 | `execute_threshold_percentage` | `number` (20–80) or `object` | `65` | Context usage that forces queued ops to execute. Capped at 80% max for cache safety. Supports per-model map. |
+| `execute_threshold_tokens` | `object` (per-model map) | — | **Optional absolute-tokens variant of `execute_threshold_percentage`.** Per-model map (e.g. `{ "default": 150000, "github-copilot/gpt-5.2-codex": 40000 }`). When set for a model, overrides the percentage-based threshold for that model. Clamped to `80% × context_limit` with a warn log. Requires a resolvable context limit — falls through to percentage if unavailable. See below. |
 | `auto_drop_tool_age` | `number` | `100` | Auto-drop tool outputs older than N tags during execution. |
+| `drop_tool_structure` | `boolean` | `true` | When `true`, dropped tool parts are fully removed from the transformed prompt. When `false`, tool call structure is preserved: tool name kept, tool inputs truncated to 5 chars + `...[truncated]`, tool output replaced with `[truncated]`. Preserving structure keeps the agent aware that prior tools ran (preventing hallucinated re-calls) at the cost of ~4K additional tokens per ~60 dropped tools. |
 | `clear_reasoning_age` | `number` | `50` | Clear thinking/reasoning blocks older than N tags. |
 | `iteration_nudge_threshold` | `number` | `15` | Consecutive assistant turns without user input before an iteration nudge. |
 | `historian_timeout_ms` | `number` | `300000` | Timeout per historian call (ms). |
-| `history_budget_percentage` | `number` (0–1) | `0.15` | Fraction of usable context reserved for the history block. Triggers compression when exceeded. |
+| `history_budget_percentage` | `number` (0.05–0.5) | `0.15` | Fraction of usable context (`context_limit × execute_threshold`) reserved for the history block. Triggers compression when exceeded. |
 | `compaction_markers` | `boolean` | `true` | Inject compaction boundaries into OpenCode's DB after historian publishes. Reduces transform input size for long sessions. |
 | `commit_cluster_trigger` | `object` | See below | Controls the commit-cluster historian trigger. |
 
@@ -93,6 +95,37 @@ A **commit cluster** is a distinct work phase where the agent made one or more g
 
 Set `enabled: false` to disable this trigger entirely and rely only on pressure-based and tail-size triggers for historian.
 
+### `execute_threshold_tokens`
+
+An absolute-tokens alternative to `execute_threshold_percentage`. Useful when you want a hard cap expressed in tokens rather than a percentage — for example, when a provider limits effective prompt size below its advertised context window.
+
+```jsonc
+{
+  "execute_threshold_tokens": {
+    "default": 150000,                          // fires at 150K for any model without an explicit entry
+    "github-copilot/gpt-5.2-codex": 40000       // fires at 40K specifically for gpt-5.2-codex
+  }
+}
+```
+
+**Behavior:**
+
+- Per-model map only — no bare-number form. All sessions are assumed to have different context limits, so the `default` key acts as a fallback inside the map.
+- **Tokens wins:** when a matching entry exists for the current model, it overrides the percentage-based threshold for that model. Other models continue to use `execute_threshold_percentage`.
+- **Progressive key lookup** just like percentage config — `openai/gpt-5.4-fast` matches `openai/gpt-5.4` if the derived key is absent.
+- **Clamped at 80% × context_limit** for the same cache-safety reason as percentage. If the clamp fires, a `log.warn` records the original and capped value.
+- Requires a **resolvable context limit** at runtime. On brand-new sessions before any response arrives, the context limit is unknown — in that case, resolution falls through to `execute_threshold_percentage`. Once the first response lands, the correct tokens-based threshold is applied on the following turn.
+
+**When to prefer tokens over percentage:**
+
+- You hit a provider-side prompt cap (like GitHub Copilot's `max_prompt_tokens` ignoring user config overrides — see the github-copilot interaction in the project KNOWN_ISSUES).
+- You want consistent compaction behavior across models with very different context window sizes.
+
+**When to prefer percentage:**
+
+- You want the threshold to scale proportionally with the model's window (bigger window → compacts later in absolute terms).
+- You're not targeting a specific provider cap.
+
 ---
 
 ## Model Resolution
@@ -108,6 +141,34 @@ Each agent has a built-in fallback chain tried in order when no model is explici
 Setting `model` in any agent config overrides the fallback chain entirely. Setting `fallback_models` replaces the built-in chain with your custom list.
 
 > **Tip — Dreamer with local models:** Since the dreamer runs during idle time (typically overnight), it works well with local models. Even slower ones like `ollama/mlx-qwen3.5-27b-claude-4.6-opus-reasoning-distilled` are fine — there's no user waiting.
+
+### Advanced agent fields
+
+All three agents (`historian`, `dreamer`, `sidekick`) accept these additional fields beyond the common `model`, `fallback_models`, `temperature`, `variant`, `prompt`. Most map directly to OpenCode's `AgentConfig` and pass through unchanged.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tools` | `{ [toolName: string]: boolean }` | Restrict which tools the agent can use. `{ "bash": false, "write": false }` disables those tools for this agent only. |
+| `permission` | `object` | Per-agent permission overrides. Sub-fields: `edit`, `bash`, `webfetch`, `doom_loop`, `external_directory`. Each accepts `"ask"`, `"allow"`, or `"deny"`. `bash` additionally accepts a record form for per-command rules. |
+| `disable` | `boolean` | Disable the agent without removing its config. Useful for toggling on/off during testing. |
+| `description` | `string` | Agent description shown in OpenCode UI. |
+| `mode` | `"subagent"` \| `"primary"` \| `"all"` | OpenCode agent mode. Magic Context internal agents run as `subagent`. |
+| `top_p` | `number` (0–1) | Nucleus sampling. |
+| `maxSteps` | `number` | Max reasoning steps per agent call. |
+| `maxTokens` | `number` | Max output tokens. ⚠️ OpenCode does not currently consume this field for plugin-registered agents — setting it has no effect. Tracked in the project as a known limitation. |
+| `color` | `string` (`#RRGGBB`) | Display color in OpenCode UI. |
+
+Example — restricting historian to read-only tools and denying bash:
+
+```jsonc
+{
+  "historian": {
+    "model": "github-copilot/gpt-5.4",
+    "tools": { "bash": false, "write": false, "edit": false },
+    "permission": { "bash": "deny", "webfetch": "deny" }
+  }
+}
+```
 
 ---
 
@@ -201,10 +262,17 @@ Controls semantic search for cross-session memories.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `provider` | `"local"` \| `"openai-compatible"` \| `"off"` | `"local"` | `"local"` runs `Xenova/all-MiniLM-L6-v2` in-process. |
+| `provider` | `"local"` \| `"openai-compatible"` \| `"off"` | `"local"` | `"local"` runs `Xenova/all-MiniLM-L6-v2` in-process. `"off"` disables semantic ranking entirely — see below. |
 | `model` | `string` | `"Xenova/all-MiniLM-L6-v2"` | Embedding model. |
 | `endpoint` | `string` | — | Required for `"openai-compatible"`. |
 | `api_key` | `string` | — | Optional API key for remote endpoints. |
+
+When `provider: "off"`:
+
+- No embeddings are generated. `ctx_memory(write)` skips embedding inline and the background embedding sweep becomes a no-op.
+- `ctx_search` and memory injection fall back to FTS5 (BM25) ranking only. Keyword matches still work; semantic similarity does not.
+- Session-start memory injection still happens when `memory.enabled` is `true` — memories are ordered by utility tier plus `seen_count` rather than semantic similarity to the current turn.
+- Memories written while `off` is active will have no embedding row; if you later re-enable `"local"` or `"openai-compatible"`, the background sweep embeds them on the next 15-minute tick.
 
 ```jsonc
 {
@@ -256,13 +324,17 @@ It is useful when starting a new session. It's better to choose a fast and cheap
 | `fallback_models` | `string` or `string[]` | Fallback models. |
 | `temperature` | `number` (0–2) | Sampling temperature. |
 | `variant` | `string` | Agent variant. |
-| `prompt` | `string` | Agent prompt override. |
+| `prompt` | `string` | Persistent agent-level system prompt override. Applies to every sidekick run. |
+
+### Operational fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `boolean` | `false` | Enable sidekick. |
 | `timeout_ms` | `number` | `30000` | Timeout per run (ms). |
-| `system_prompt` | `string` | — | Per-run system prompt override for the sidekick child session. |
+| `system_prompt` | `string` | — | Per-invocation system prompt prepended to the sidekick child session for this `/ctx-aug` call only. Layered on top of `prompt` if both are set. |
+
+> **`prompt` vs `system_prompt`:** `prompt` is the persistent agent definition applied to every sidekick run. `system_prompt` is a per-call override injected into that specific child session — useful when a single `/ctx-aug` invocation needs different guidance than the default.
 
 ---
 
@@ -323,6 +395,7 @@ When enabled, dreamer analyzes which files each session's agent reads most frequ
   },
   "protected_tags": 10,
   "auto_drop_tool_age": 50,
+  "drop_tool_structure": true,
   "history_budget_percentage": 0.15,
   "compaction_markers": true,
 

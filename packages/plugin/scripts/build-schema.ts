@@ -106,14 +106,14 @@ function buildSchema(): Record<string, unknown> {
 
             execute_threshold_percentage: {
                 oneOf: [
-                    { type: "number", minimum: 35, maximum: 80 },
+                    { type: "number", minimum: 20, maximum: 80 },
                     {
                         type: "object",
                         properties: {
-                            default: { type: "number", minimum: 35, maximum: 80 },
+                            default: { type: "number", minimum: 20, maximum: 80 },
                         },
                         required: ["default"],
-                        additionalProperties: { type: "number", minimum: 35, maximum: 80 },
+                        additionalProperties: { type: "number", minimum: 20, maximum: 80 },
                         description:
                             "Per-model threshold (e.g. { \"default\": 65, \"anthropic/claude-sonnet-4-6\": 40 })",
                     },
@@ -121,6 +121,16 @@ function buildSchema(): Record<string, unknown> {
                 default: 65,
                 description:
                     "Context usage percentage that forces queued operations to execute. Capped at 80% for cache safety. Number or per-model object.",
+            },
+
+            execute_threshold_tokens: {
+                type: "object",
+                properties: {
+                    default: { type: "number", minimum: 5000, maximum: 2_000_000 },
+                },
+                additionalProperties: { type: "number", minimum: 5000, maximum: 2_000_000 },
+                description:
+                    "Absolute token threshold that forces queued operations to execute. Per-model map (e.g. { \"default\": 150000, \"github-copilot/gpt-5.2-codex\": 40000 }). When set for a model, overrides execute_threshold_percentage. Clamped to 80% × context_limit with a warn log. Requires a resolvable model context limit at runtime to convert to an effective percentage.",
             },
 
             nudge_interval_tokens: {
@@ -143,6 +153,13 @@ function buildSchema(): Record<string, unknown> {
                 minimum: 10,
                 default: 100,
                 description: "Auto-drop tool outputs older than N tags during queue execution",
+            },
+
+            drop_tool_structure: {
+                type: "boolean",
+                default: true,
+                description:
+                    "When true, dropped tool parts are fully removed. When false, tool call structure is preserved (name kept, inputs truncated to 5 chars + '...[truncated]', output replaced with '[truncated]') to prevent agents from hallucinating re-calls.",
             },
 
             clear_reasoning_age: {
@@ -195,6 +212,76 @@ function buildSchema(): Record<string, unknown> {
                 default: { enabled: true, min_clusters: 3 },
                 description:
                     "Fire historian when enough commit clusters accumulate in the unsummarized tail",
+            },
+
+            compaction_markers: {
+                type: "boolean",
+                default: true,
+                description:
+                    "Inject compaction boundaries into OpenCode's DB after historian publishes. Reduces transform input size for long sessions by letting OpenCode's filterCompacted skip older messages.",
+            },
+
+            experimental: {
+                type: "object",
+                properties: {
+                    user_memories: {
+                        type: "object",
+                        properties: {
+                            enabled: {
+                                type: "boolean",
+                                default: false,
+                                description:
+                                    "Extract user behavior observations from historian runs and promote recurring patterns to stable user memories injected into all sessions. Requires dreamer.",
+                            },
+                            promotion_threshold: {
+                                type: "number",
+                                minimum: 2,
+                                maximum: 20,
+                                default: 3,
+                                description:
+                                    "Minimum candidate observations before dreamer considers promotion to stable user memory",
+                            },
+                        },
+                        additionalProperties: false,
+                        default: { enabled: false, promotion_threshold: 3 },
+                        description: "User memory extraction and promotion (experimental).",
+                    },
+                    pin_key_files: {
+                        type: "object",
+                        properties: {
+                            enabled: {
+                                type: "boolean",
+                                default: false,
+                                description:
+                                    "Pin frequently-read key files into the system prompt. Dreamer identifies key files per session based on read patterns. Requires dreamer.",
+                            },
+                            token_budget: {
+                                type: "number",
+                                minimum: 2000,
+                                maximum: 30000,
+                                default: 10000,
+                                description: "Total token budget for all pinned key files",
+                            },
+                            min_reads: {
+                                type: "number",
+                                minimum: 2,
+                                maximum: 20,
+                                default: 4,
+                                description:
+                                    "Minimum full-read count before a file is considered for pinning",
+                            },
+                        },
+                        additionalProperties: false,
+                        default: { enabled: false, token_budget: 10000, min_reads: 4 },
+                        description: "Pin frequently-read key files into system prompt (experimental).",
+                    },
+                },
+                additionalProperties: false,
+                default: {
+                    user_memories: { enabled: false, promotion_threshold: 3 },
+                    pin_key_files: { enabled: false, token_budget: 10000, min_reads: 4 },
+                },
+                description: "Experimental features — gated behind flags, may change between releases.",
             },
 
             historian: {

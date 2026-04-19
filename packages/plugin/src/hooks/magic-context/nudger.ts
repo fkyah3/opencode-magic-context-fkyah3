@@ -95,6 +95,14 @@ export function createNudger(config: {
             contextUsage,
             preloadedTags,
         );
+        // Intentional: nudger resolves only the percentage-config path; it does
+        // NOT pass a model key, tokens config, or contextLimit. Nudges are
+        // advisory prompts the agent may ignore — the scheduler is authoritative
+        // for execute decisions and already uses the full tokens-aware resolver.
+        // Threading full resolution through every nudge evaluation would add cost
+        // without a behavioral win: a mismatch here only affects *when* we remind
+        // the agent to drop, not *when* we actually execute. Revisit only if
+        // per-model token-mode nudge bands turn out to matter in practice.
         const executeThreshold = resolveExecuteThreshold(
             config.execute_threshold_percentage,
             undefined,

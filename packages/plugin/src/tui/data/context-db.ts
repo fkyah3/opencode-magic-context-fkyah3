@@ -98,6 +98,7 @@ export async function loadStatusDetail(
         cacheRemainingMs: 0,
         cacheExpired: false,
         executeThreshold: 65,
+        executeThresholdMode: "percentage",
         protectedTagCount: 20,
         nudgeInterval: 20000,
         historyBudgetPercentage: 0.15,

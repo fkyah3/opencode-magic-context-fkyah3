@@ -64,7 +64,7 @@ const FIELD_DEFS: FieldDef[] = [
   // General
   { key: "enabled", label: "Enabled", type: "boolean", description: "Enable the magic-context plugin", section: "General" },
   { key: "ctx_reduce_enabled", label: "Agent Controlled Reduction", type: "boolean", description: "Enable agent controlled reductions via ctx_reduce tool. When enabled, agent is prompted and nudged to choose what messages and tool calls to drop periodically. If disabled the system still works via auto drops based on message ages.", section: "General" },
-  { key: "drop_tool_structure", label: "Drop Tool Structure", type: "boolean", description: "When enabled, dropped tool calls are fully removed. When disabled, tool input/output is truncated in place so tool structure stays visible.", section: "General", defaultValue: false },
+  { key: "drop_tool_structure", label: "Drop Tool Structure", type: "boolean", description: "When enabled, dropped tool calls are fully removed. When disabled, tool input/output is truncated in place so tool structure stays visible.", section: "General", defaultValue: true },
   { key: "compaction_markers", label: "Compaction Markers", type: "boolean", description: "Inject boundary into OpenCode's DB so transform only processes the live tail after historian compaction. Significantly reduces transform input size for long sessions.", section: "General", defaultValue: true },
   // Thresholds
   // cache_ttl and execute_threshold_percentage are rendered as custom PerModelField components
@@ -81,6 +81,7 @@ const FIELD_DEFS: FieldDef[] = [
   { key: "memory.enabled", label: "Memory Enabled", type: "boolean", description: "Enable cross-session project memory.", section: "Memory" },
   { key: "memory.injection_budget_tokens", label: "Injection Budget (tokens)", type: "number", description: "Max tokens for memory injection into session history.", section: "Memory" },
   { key: "memory.auto_promote", label: "Auto Promote", type: "boolean", description: "Automatically promote session facts to project memory.", section: "Memory" },
+  { key: "memory.retrieval_count_promotion_threshold", label: "Retrieval Count Promotion Threshold", type: "number", description: "Minimum ctx_search retrieval count before a session fact is auto-promoted to project memory.", section: "Memory" },
 ];
 
 // ── Nested value access helpers ─────────────────────────────
@@ -205,7 +206,7 @@ function ConfigForm(props: {
   const getRangeConfig = (fieldKey: string): { min: number; max: number; step: number; suffix: string; defaultValue: number } => {
     switch (fieldKey) {
       case "execute_threshold_percentage":
-        return { min: 35, max: 80, step: 1, suffix: "%", defaultValue: 65 };
+        return { min: 20, max: 80, step: 1, suffix: "%", defaultValue: 65 };
       case "history_budget_percentage":
         return { min: 0.05, max: 0.5, step: 0.01, suffix: "", defaultValue: 0.15 };
       case "nudge_interval_tokens":
@@ -592,13 +593,25 @@ function ConfigForm(props: {
                       <PerModelField
                         label="Execute Threshold %"
                         configKey="execute_threshold_percentage"
-                        description="Context usage percentage (35–80) at which queued drops execute. Max 80."
+                        description="Context usage percentage (20–80) at which queued drops execute. Max 80."
                         value={getNestedValue(formData(), "execute_threshold_percentage") ?? getNestedValue(parsed(), "execute_threshold_percentage")}
                         onChange={(v) => handleFieldChange("execute_threshold_percentage", v)}
                         models={models() ?? []}
                         inputType="slider"
-                        sliderConfig={{ min: 35, max: 80, step: 1, suffix: "%", defaultValue: 65 }}
+                        sliderConfig={{ min: 20, max: 80, step: 1, suffix: "%", defaultValue: 65 }}
                         defaultPlaceholder="65"
+                      />
+                      <PerModelField
+                        label="Execute Threshold (tokens)"
+                        configKey="execute_threshold_tokens"
+                        description="Optional absolute-tokens threshold. When set for a model, overrides the percentage above. Per-model map only (use 'default' key for a fallback across all unlisted models). Clamped to 80% × context_limit at runtime."
+                        value={getNestedValue(formData(), "execute_threshold_tokens") ?? getNestedValue(parsed(), "execute_threshold_tokens")}
+                        onChange={(v) => handleFieldChange("execute_threshold_tokens", v)}
+                        models={models() ?? []}
+                        inputType="text"
+                        alwaysObject
+                        numericText
+                        defaultPlaceholder="150000"
                       />
                     </div>
                   </div>

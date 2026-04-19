@@ -62,6 +62,17 @@ export interface StatusDetail extends SidebarSnapshot {
     cacheRemainingMs: number;
     cacheExpired: boolean;
     executeThreshold: number;
+    /**
+     * Which config source produced `executeThreshold`. "tokens" means
+     * execute_threshold_tokens matched for this session's model and was
+     * converted to a percentage. "percentage" means percentage config was used.
+     */
+    executeThresholdMode: "percentage" | "tokens";
+    /**
+     * When `executeThresholdMode === "tokens"`, the absolute clamped token value
+     * (≤ 80% × contextLimit) that will trigger execute. Undefined in percentage mode.
+     */
+    executeThresholdTokens?: number;
     protectedTagCount: number;
     nudgeInterval: number;
     historyBudgetPercentage: number;

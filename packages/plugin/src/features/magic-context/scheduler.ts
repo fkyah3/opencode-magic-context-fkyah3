@@ -18,11 +18,13 @@ export interface Scheduler {
         currentTime?: number,
         sessionId?: string,
         modelKey?: string,
+        contextLimit?: number,
     ): SchedulerDecision;
 }
 
 interface SchedulerConfig {
     executeThresholdPercentage: number | { default: number; [modelKey: string]: number };
+    executeThresholdTokens?: { default?: number; [modelKey: string]: number | undefined };
 }
 
 export function parseCacheTtl(ttl: string): number {
@@ -52,6 +54,7 @@ export function createScheduler(config: SchedulerConfig): Scheduler {
             currentTime: number = Date.now(),
             sessionId?: string,
             modelKey?: string,
+            contextLimit?: number,
         ): SchedulerDecision {
             // Brand-new sessions (no usage, no baseline) have nothing to execute.
             // Skip the TTL check that would always fire due to lastResponseTime=0.
@@ -59,10 +62,26 @@ export function createScheduler(config: SchedulerConfig): Scheduler {
                 return "defer";
             }
 
+            // Tokens-based config requires contextLimit to convert to effective %.
+            // When the caller doesn't have it handy we derive it from usage:
+            // contextLimit = inputTokens / (percentage / 100). This is the same
+            // denominator event-handler used to compute contextUsage.percentage,
+            // so both resolutions stay consistent on the same pass.
+            const effectiveContextLimit =
+                contextLimit ??
+                (contextUsage.percentage > 0 && contextUsage.inputTokens > 0
+                    ? contextUsage.inputTokens / (contextUsage.percentage / 100)
+                    : undefined);
+
             const threshold = resolveExecuteThreshold(
                 config.executeThresholdPercentage,
                 modelKey,
                 65,
+                {
+                    tokensConfig: config.executeThresholdTokens,
+                    contextLimit: effectiveContextLimit,
+                    sessionId,
+                },
             );
             if (contextUsage.percentage >= threshold) {
                 return "execute";

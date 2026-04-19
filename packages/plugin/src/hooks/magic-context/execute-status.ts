@@ -14,7 +14,7 @@ import {
     getProactiveCompartmentTriggerPercentage,
     POST_DROP_TARGET_RATIO,
 } from "./compartment-trigger";
-import { resolveExecuteThreshold } from "./event-resolvers";
+import { resolveExecuteThresholdDetail } from "./event-resolvers";
 import { formatBytes } from "./format-bytes";
 import {
     formatRollingNudgeBand,
@@ -22,6 +22,22 @@ import {
     getRollingNudgeIntervalTokens,
 } from "./nudge-bands";
 import { estimateTokens } from "./read-session-formatting";
+
+function formatExecuteThreshold(
+    thresholdPercentage: number,
+    mode: "tokens" | "percentage",
+    contextLimit: number,
+): string {
+    if (mode === "tokens" && contextLimit > 0) {
+        const tokens = Math.floor((thresholdPercentage / 100) * contextLimit);
+        return `${tokens.toLocaleString()} tokens (${thresholdPercentage.toFixed(1)}% of ${contextLimit.toLocaleString()}) [token-mode]`;
+    }
+    if (contextLimit > 0) {
+        const tokens = Math.floor((thresholdPercentage / 100) * contextLimit);
+        return `${thresholdPercentage}% (${tokens.toLocaleString()} of ${contextLimit.toLocaleString()})`;
+    }
+    return `${thresholdPercentage}%`;
+}
 
 export function executeStatus(
     db: Database,
@@ -34,12 +50,25 @@ export function executeStatus(
     liveModelKey?: string,
     historyBudgetPercentage?: number,
     commitClusterTrigger?: { enabled: boolean; min_clusters: number },
+    executeThresholdTokens?: { default?: number; [modelKey: string]: number | undefined },
+    contextLimit?: number,
 ): string {
-    const executeThresholdPercentage = resolveExecuteThreshold(
+    // Single source of truth — resolver tells us both the effective percentage AND
+    // which config source won (tokens vs percentage). Previously /ctx-status
+    // reimplemented the token-match check here and missed progressive base-model
+    // lookup (e.g. `openai/gpt-5.4-fast` → `openai/gpt-5.4`), causing display drift.
+    const thresholdDetail = resolveExecuteThresholdDetail(
         executeThresholdPercentageConfig,
         liveModelKey,
         DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE,
+        {
+            tokensConfig: executeThresholdTokens,
+            contextLimit,
+            sessionId,
+        },
     );
+    const executeThresholdPercentage = thresholdDetail.percentage;
+    const thresholdMode: "tokens" | "percentage" = thresholdDetail.mode;
     try {
         const meta = getOrCreateSessionMeta(db, sessionId);
         const tags = getTagsBySession(db, sessionId);
@@ -73,6 +102,13 @@ export function executeStatus(
             executeThresholdPercentage,
         );
 
+        const displayContextLimit =
+            contextLimit && contextLimit > 0
+                ? contextLimit
+                : meta.lastContextPercentage > 0
+                  ? Math.round(meta.lastInputTokens / (meta.lastContextPercentage / 100))
+                  : 0;
+
         const lines: string[] = [
             "## Magic Status",
             "",
@@ -98,7 +134,7 @@ export function executeStatus(
             `- Queue will auto-execute: ${cacheExpired ? "yes (cache expired)" : `when TTL expires or context >= ${executeThresholdPercentage}%`}`,
             "",
             "### Rolling Nudges",
-            `- Execute threshold: ${executeThresholdPercentage}%`,
+            `- Execute threshold: ${formatExecuteThreshold(executeThresholdPercentage, thresholdMode, displayContextLimit)}`,
             `- Rolling anchor: ${meta.lastNudgeTokens.toLocaleString()} tokens`,
             `- Effective interval: ${nudgeInterval.toLocaleString()} tokens`,
             `- Next rolling nudge after: ${(meta.lastNudgeTokens + nudgeInterval).toLocaleString()} tokens`,
@@ -110,18 +146,13 @@ export function executeStatus(
             `**Subagent session:** ${meta.isSubagent}`,
         ];
 
-        const contextLimit =
-            meta.lastContextPercentage > 0
-                ? Math.round(meta.lastInputTokens / (meta.lastContextPercentage / 100))
-                : 0;
-
         if (meta.lastContextPercentage > 0 || meta.lastInputTokens > 0) {
             lines.push(
                 "",
                 "### Context Usage",
                 `- Last percentage: ${meta.lastContextPercentage.toFixed(1)}%`,
                 `- Last input tokens: ${meta.lastInputTokens.toLocaleString()}`,
-                `- Resolved context limit: ${contextLimit > 0 ? contextLimit.toLocaleString() : "unknown"}`,
+                `- Resolved context limit: ${displayContextLimit > 0 ? displayContextLimit.toLocaleString() : "unknown"}`,
                 `- Proactive compartment evaluation: ${proactiveCompartmentTrigger}%`,
                 `- Post-drop target for historian: ${(executeThresholdPercentage * POST_DROP_TARGET_RATIO).toFixed(0)}% (${executeThresholdPercentage}% * ${POST_DROP_TARGET_RATIO})`,
                 `- Commit cluster trigger: ${commitClusterTrigger?.enabled !== false ? `enabled (min ${commitClusterTrigger?.min_clusters ?? 3} clusters)` : "disabled"}, tail-size trigger: > 3x compartment budget`,
@@ -142,9 +173,9 @@ export function executeStatus(
         }
 
         const budgetTokens =
-            historyBudgetPercentage && contextLimit > 0
+            historyBudgetPercentage && displayContextLimit > 0
                 ? Math.floor(
-                      contextLimit *
+                      displayContextLimit *
                           (Math.min(executeThresholdPercentage, 80) / 100) *
                           historyBudgetPercentage,
                   )

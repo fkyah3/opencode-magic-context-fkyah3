@@ -26,6 +26,7 @@ export function createSessionHooks(args: {
     const scheduler = createScheduler({
         executeThresholdPercentage:
             pluginConfig.execute_threshold_percentage ?? DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE,
+        executeThresholdTokens: pluginConfig.execute_threshold_tokens,
     });
     const compactionHandler = createCompactionHandler();
 
@@ -50,6 +51,7 @@ export function createSessionHooks(args: {
                 execute_threshold_percentage:
                     pluginConfig.execute_threshold_percentage ??
                     DEFAULT_EXECUTE_THRESHOLD_PERCENTAGE,
+                execute_threshold_tokens: pluginConfig.execute_threshold_tokens,
                 historian: pluginConfig.historian,
                 history_budget_percentage: pluginConfig.history_budget_percentage,
                 historian_timeout_ms: pluginConfig.historian_timeout_ms,
