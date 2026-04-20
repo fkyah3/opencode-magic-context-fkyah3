@@ -29,6 +29,7 @@ import { createEventHandler } from "./event-handler";
 import { resolveContextLimit, resolveModelKey } from "./event-resolvers";
 import { clearInjectionCache } from "./inject-compartments";
 import { createNudger } from "./nudger";
+import { findLastAssistantModelFromOpenCodeDb } from "./read-session-db";
 import { createTextCompleteHandler } from "./text-complete";
 import { createNudgePlacementStore, createTransform } from "./transform";
 
@@ -177,6 +178,30 @@ export function createMagicContextHook(deps: MagicContextDeps) {
     const agentBySession = deps.liveSessionState?.agentBySession ?? new Map<string, string>();
     const recentReduceBySession = new Map<string, number>();
     const toolUsageSinceUserTurn = new Map<string, number>();
+
+    /**
+     * Return the live provider/model for a session.
+     *
+     * Prefers the in-memory `liveModelBySession` map populated by transform passes
+     * and `chat.message` hooks. When the map is empty (for example `/ctx-status`
+     * is invoked before any transform pass has run since restart), falls back to
+     * reading the last assistant message from OpenCode's SQLite DB and caches the
+     * result so subsequent calls in the same process don't hit the DB again.
+     *
+     * Returns undefined only for brand-new sessions with no assistant turn yet.
+     */
+    const resolveLiveModel = (
+        sessionId: string,
+    ): { providerID: string; modelID: string } | undefined => {
+        const cached = liveModelBySession.get(sessionId);
+        if (cached) return cached;
+        const recovered = findLastAssistantModelFromOpenCodeDb(sessionId);
+        if (recovered) {
+            liveModelBySession.set(sessionId, recovered);
+            return recovered;
+        }
+        return undefined;
+    };
     const ctxReduceEnabled = deps.config.ctx_reduce_enabled !== false;
     const nudgerWithRecentReduce = ctxReduceEnabled
         ? createNudger({
@@ -315,11 +340,17 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         historyBudgetPercentage: deps.config.history_budget_percentage,
         commitClusterTrigger: deps.config.commit_cluster_trigger,
         getLiveModelKey: (sessionId) => {
-            const model = liveModelBySession.get(sessionId);
+            // Use DB fallback so /ctx-status shows the correct model-specific
+            // threshold even before the first transform pass has populated
+            // liveModelBySession after restart. Without this, the resolver
+            // falls back to the default threshold and displays a stale budget.
+            const model = resolveLiveModel(sessionId);
             return model ? `${model.providerID}/${model.modelID}` : undefined;
         },
         getContextLimit: (sessionId) => {
-            const model = liveModelBySession.get(sessionId);
+            // Same DB fallback as getLiveModelKey — /ctx-status's "Resolved
+            // context limit" and history-budget math depend on the live model.
+            const model = resolveLiveModel(sessionId);
             if (!model) return undefined;
             return resolveContextLimit(model.providerID, model.modelID);
         },
@@ -335,7 +366,9 @@ export function createMagicContextHook(deps: MagicContextDeps) {
                         deps.config.historian_timeout_ms ?? DEFAULT_HISTORIAN_TIMEOUT_MS,
                     directory: deps.directory,
                     fallbackModelId: (() => {
-                        const model = liveModelBySession.get(sessionId);
+                        // DB fallback so /ctx-recomp's last-resort fallback model
+                        // is known even when invoked before the first transform.
+                        const model = resolveLiveModel(sessionId);
                         return model ? `${model.providerID}/${model.modelID}` : undefined;
                     })(),
                     getNotificationParams: () =>

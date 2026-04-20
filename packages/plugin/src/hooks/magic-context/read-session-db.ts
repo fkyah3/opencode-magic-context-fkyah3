@@ -61,3 +61,45 @@ export function getRawSessionMessageCountFromDb(db: Database, sessionId: string)
         .get(sessionId) as RawCountRow | null;
     return typeof row?.count === "number" ? row.count : 0;
 }
+
+interface AssistantModelRow {
+    providerID?: string;
+    modelID?: string;
+}
+
+/**
+ * Read the provider/model of the most recent assistant message for a session
+ * directly from OpenCode's SQLite DB. Used as a fallback when the in-memory
+ * `liveModelBySession` map is empty — for example when `/ctx-status` is invoked
+ * before any transform pass has populated the map after restart.
+ *
+ * Returns null for brand-new sessions with no assistant turn yet.
+ */
+export function findLastAssistantModelFromOpenCodeDb(
+    sessionId: string,
+): { providerID: string; modelID: string } | null {
+    try {
+        return withReadOnlySessionDb((db) => {
+            const row = db
+                .prepare(
+                    `SELECT json_extract(data, '$.providerID') as providerID,
+                            json_extract(data, '$.modelID') as modelID
+                     FROM message
+                     WHERE session_id = ?
+                       AND json_extract(data, '$.role') = 'assistant'
+                       AND json_extract(data, '$.providerID') IS NOT NULL
+                       AND json_extract(data, '$.modelID') IS NOT NULL
+                     ORDER BY time_created DESC
+                     LIMIT 1`,
+                )
+                .get(sessionId) as AssistantModelRow | null;
+            if (!row || typeof row.providerID !== "string" || typeof row.modelID !== "string") {
+                return null;
+            }
+            return { providerID: row.providerID, modelID: row.modelID };
+        });
+    } catch (error) {
+        log("[magic-context] failed to recover live model from OpenCode DB:", error);
+        return null;
+    }
+}
