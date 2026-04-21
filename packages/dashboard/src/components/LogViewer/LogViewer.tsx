@@ -1,5 +1,12 @@
-import { createSignal, createResource, createEffect, For, Show, onMount, onCleanup } from "solid-js";
-import type { LogEntry } from "../../lib/types";
+import {
+  createEffect,
+  createResource,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
 import { getLogEntries, truncate } from "../../lib/api";
 import FilterSelect from "../shared/FilterSelect";
 
@@ -8,11 +15,11 @@ export default function LogViewer() {
   const [componentFilter, setComponentFilter] = createSignal<string>("");
   const [searchQuery, setSearchQuery] = createSignal<string>("");
   const [paused, setPaused] = createSignal(false);
-  const [maxLines, setMaxLines] = createSignal(500);
+  const [maxLines, _setMaxLines] = createSignal(500);
 
   const [entries, { refetch }] = createResource(
     () => maxLines(),
-    (lines) => getLogEntries(lines)
+    (lines) => getLogEntries(lines),
   );
 
   // Auto-refresh every 3 seconds when not paused
@@ -68,7 +75,10 @@ export default function LogViewer() {
 
     const search = searchQuery().toLowerCase();
     if (search) {
-      e = e.filter((entry) => entry.message.toLowerCase().includes(search) || entry.raw.toLowerCase().includes(search));
+      e = e.filter(
+        (entry) =>
+          entry.message.toLowerCase().includes(search) || entry.raw.toLowerCase().includes(search),
+      );
     }
 
     return e;
@@ -76,13 +86,20 @@ export default function LogViewer() {
 
   const componentColor = (comp: string) => {
     switch (comp) {
-      case "event": return "var(--accent)";
-      case "transform": return "var(--green)";
-      case "dreamer": return "var(--indigo)";
-      case "historian": return "var(--purple)";
-      case "nudge": return "var(--amber)";
-      case "note-nudge": return "var(--amber)";
-      default: return "var(--text-secondary)";
+      case "event":
+        return "var(--accent)";
+      case "transform":
+        return "var(--green)";
+      case "dreamer":
+        return "var(--indigo)";
+      case "historian":
+        return "var(--purple)";
+      case "nudge":
+        return "var(--amber)";
+      case "note-nudge":
+        return "var(--amber)";
+      default:
+        return "var(--text-secondary)";
     }
   };
 
@@ -98,9 +115,12 @@ export default function LogViewer() {
         <h1 class="section-title">Logs</h1>
         <div class="section-actions">
           <Show when={!paused()}>
-            <span style={{ color: "var(--green)", "font-size": "12px", "margin-right": "8px" }}>● Live</span>
+            <span style={{ color: "var(--green)", "font-size": "12px", "margin-right": "8px" }}>
+              ● Live
+            </span>
           </Show>
           <button
+            type="button"
             class={`btn sm ${paused() ? "primary" : ""}`}
             onClick={() => setPaused(!paused())}
           >
@@ -148,9 +168,7 @@ export default function LogViewer() {
               <div class="empty-state">
                 <span class="empty-state-icon">📋</span>
                 <span>No log entries found</span>
-                <span style={{ "font-size": "11px" }}>
-                  Log file: /tmp/magic-context.log
-                </span>
+                <span style={{ "font-size": "11px" }}>Log file: /tmp/magic-context.log</span>
               </div>
             }
           >
@@ -173,8 +191,15 @@ export default function LogViewer() {
                     }}
                   >
                     {/* Timestamp */}
-                    <span style={{ color: "var(--text-muted)", "white-space": "nowrap", "flex-shrink": "0" }}>
-                      {entry.timestamp.split("T").pop()?.split(".")[0] ?? entry.timestamp.slice(0, 19)}
+                    <span
+                      style={{
+                        color: "var(--text-muted)",
+                        "white-space": "nowrap",
+                        "flex-shrink": "0",
+                      }}
+                    >
+                      {entry.timestamp.split("T").pop()?.split(".")[0] ??
+                        entry.timestamp.slice(0, 19)}
                     </span>
                     {/* Session */}
                     <Show when={entry.session_id}>
@@ -183,24 +208,35 @@ export default function LogViewer() {
                       </span>
                     </Show>
                     {/* Component */}
-                    <span style={{ color: componentColor(entry.component), "flex-shrink": "0", "min-width": "60px" }}>
+                    <span
+                      style={{
+                        color: componentColor(entry.component),
+                        "flex-shrink": "0",
+                        "min-width": "60px",
+                      }}
+                    >
                       {entry.component}
                     </span>
                     {/* Message */}
-                    <span style={{ "word-break": "break-word", flex: "1" }}>
-                      {entry.message}
-                    </span>
+                    <span style={{ "word-break": "break-word", flex: "1" }}>{entry.message}</span>
                     {/* Cache bar */}
                     <Show when={entry.hit_ratio != null}>
-                      <div style={{ display: "flex", "align-items": "center", gap: "4px", "flex-shrink": "0" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          "align-items": "center",
+                          gap: "4px",
+                          "flex-shrink": "0",
+                        }}
+                      >
                         <div class="cache-bar" style={{ width: "60px" }}>
                           <div
-                            class={`cache-bar-fill ${cacheBarColor(entry.hit_ratio!)}`}
-                            style={{ width: `${entry.hit_ratio! * 100}%` }}
+                            class={`cache-bar-fill ${cacheBarColor(entry.hit_ratio ?? 0)}`}
+                            style={{ width: `${(entry.hit_ratio ?? 0) * 100}%` }}
                           />
                         </div>
                         <span style={{ color: "var(--text-muted)", "font-size": "10px" }}>
-                          {(entry.hit_ratio! * 100).toFixed(0)}%
+                          {((entry.hit_ratio ?? 0) * 100).toFixed(0)}%
                         </span>
                       </div>
                     </Show>

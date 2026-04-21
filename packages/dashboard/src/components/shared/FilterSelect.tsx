@@ -1,4 +1,4 @@
-import { createSignal, For, Show, onCleanup } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 
 interface FilterOption {
   value: string;
@@ -46,17 +46,26 @@ export default function FilterSelect(props: FilterSelectProps) {
     <div class={`fsel ${props.compact ? "fsel-compact" : ""}`} ref={containerRef}>
       <button
         class="fsel-trigger"
-        onClick={() => { const wasOpen = open(); setOpen(!wasOpen); if (wasOpen) stopListening(); else startListening(); }}
+        onClick={() => {
+          const wasOpen = open();
+          setOpen(!wasOpen);
+          if (wasOpen) stopListening();
+          else startListening();
+        }}
         type="button"
       >
-        <span class={`fsel-value ${!props.value ? "placeholder" : ""}`}>
-          {selectedLabel()}
-        </span>
+        <span class={`fsel-value ${!props.value ? "placeholder" : ""}`}>{selectedLabel()}</span>
         <span class="fsel-chevron">▾</span>
       </button>
 
       <Show when={open()}>
-        <div class="fsel-dropdown" style={{ [props.align === "left" ? "left" : "right"]: "0", [props.align === "left" ? "right" : "left"]: "auto" }}>
+        <div
+          class="fsel-dropdown"
+          style={{
+            [props.align === "left" ? "left" : "right"]: "0",
+            [props.align === "left" ? "right" : "left"]: "auto",
+          }}
+        >
           <For each={props.options}>
             {(opt) => (
               <button

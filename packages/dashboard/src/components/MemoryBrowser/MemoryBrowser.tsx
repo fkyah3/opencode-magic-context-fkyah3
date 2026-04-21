@@ -329,10 +329,12 @@ export default function MemoryBrowser() {
         <h1 class="section-title">Memories</h1>
         <div class="section-actions">
           <Show when={stats()}>
-            <span style={{ "font-size": "12px", color: "var(--text-secondary)" }}>
-              {stats()!.active + stats()!.permanent} active · {stats()!.archived} archived ·{" "}
-              {stats()!.with_embeddings} embedded
-            </span>
+            {(s) => (
+              <span style={{ "font-size": "12px", color: "var(--text-secondary)" }}>
+                {s().active + s().permanent} active · {s().archived} archived ·{" "}
+                {s().with_embeddings} embedded
+              </span>
+            )}
           </Show>
         </div>
       </div>
@@ -392,11 +394,7 @@ export default function MemoryBrowser() {
             <span class="bulk-action-count">
               {selectedCount()} selected
               <Show when={selectedCount() < allVisibleMemoryIds().length}>
-                <button
-                  type="button"
-                  class="bulk-action-link"
-                  onClick={toggleAllVisibleSelection}
-                >
+                <button type="button" class="bulk-action-link" onClick={toggleAllVisibleSelection}>
                   Select all {allVisibleMemoryIds().length} visible
                 </button>
               </Show>
@@ -406,11 +404,7 @@ export default function MemoryBrowser() {
             <button type="button" class="btn sm" onClick={handleBulkArchive}>
               Archive
             </button>
-            <button
-              type="button"
-              class="btn sm danger"
-              onClick={handleBulkDelete}
-            >
+            <button type="button" class="btn sm danger" onClick={handleBulkDelete}>
               Delete
             </button>
             <button type="button" class="btn sm ghost" onClick={clearSelection}>
@@ -460,13 +454,7 @@ export default function MemoryBrowser() {
                       >
                         {/* Tri-state checkbox: clicking stops propagation so it
                             doesn't also collapse the category. */}
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleCategorySelection(mems);
-                          }}
-                          style={{ display: "flex", "align-items": "center" }}
-                        >
+                        <span style={{ display: "flex", "align-items": "center" }}>
                           <TriStateCheckbox
                             state={categorySelectionState(mems)}
                             onToggle={() => toggleCategorySelection(mems)}
@@ -489,18 +477,14 @@ export default function MemoryBrowser() {
                           {(mem) => {
                             const isSelected = () => selectedIds().has(mem.id);
                             return (
-                              <div
+                              <button
+                                type="button"
                                 class="card memory-card"
                                 classList={{ selected: isSelected() }}
                                 onClick={() => setSelectedMemory(mem)}
+                                style={{ width: "100%", "text-align": "left" }}
                               >
-                                <span
-                                  class="memory-card-checkbox"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleSelect(mem.id);
-                                  }}
-                                >
+                                <span class="memory-card-checkbox">
                                   <input
                                     type="checkbox"
                                     checked={isSelected()}
@@ -543,7 +527,7 @@ export default function MemoryBrowser() {
                                     </span>
                                   </div>
                                 </div>
-                              </div>
+                              </button>
                             );
                           }}
                         </For>
@@ -558,13 +542,15 @@ export default function MemoryBrowser() {
       </div>
 
       <Show when={selectedMemory()}>
-        <MemoryDetail
-          memory={selectedMemory()!}
-          onClose={() => setSelectedMemory(null)}
-          onStatusChange={handleStatusChange}
-          onContentChange={handleContentChange}
-          onDelete={handleDelete}
-        />
+        {(mem) => (
+          <MemoryDetail
+            memory={mem()}
+            onClose={() => setSelectedMemory(null)}
+            onStatusChange={handleStatusChange}
+            onContentChange={handleContentChange}
+            onDelete={handleDelete}
+          />
+        )}
       </Show>
     </>
   );

@@ -29,7 +29,10 @@ export default function PerModelField(props: PerModelFieldProps) {
   const [addingModel, setAddingModel] = createSignal(false);
 
   // Normalize value to { default, ...overrides } shape
-  const normalized = (): { defaultVal: string | number | undefined; overrides: Record<string, string | number> } => {
+  const normalized = (): {
+    defaultVal: string | number | undefined;
+    overrides: Record<string, string | number>;
+  } => {
     const v = props.value;
     if (v == null) return { defaultVal: undefined, overrides: {} };
     if (typeof v === "object" && !Array.isArray(v)) {
@@ -60,7 +63,10 @@ export default function PerModelField(props: PerModelFieldProps) {
   // Build the full config value from default + overrides.
   // When alwaysObject is true (schema forbids bare scalar), always emit object shape,
   // omitting undefined default so { "model": N } stays valid.
-  const buildValue = (defaultVal: string | number | undefined, overrides: Record<string, string | number>) => {
+  const buildValue = (
+    defaultVal: string | number | undefined,
+    overrides: Record<string, string | number>,
+  ) => {
     const hasDefault = defaultVal !== undefined && defaultVal !== "";
     if (props.alwaysObject) {
       if (!hasDefault && Object.keys(overrides).length === 0) return undefined;
@@ -119,7 +125,7 @@ export default function PerModelField(props: PerModelFieldProps) {
   return (
     <div class="config-field">
       <div class="config-field-header">
-        <label class="config-field-label">{props.label}</label>
+        <span class="config-field-label">{props.label}</span>
         <span class="config-field-key">{props.configKey}</span>
       </div>
       <span class="config-field-desc">{props.description}</span>
@@ -135,11 +141,18 @@ export default function PerModelField(props: PerModelFieldProps) {
               min={props.sliderConfig.min}
               max={props.sliderConfig.max}
               step={props.sliderConfig.step}
-              value={normalized().defaultVal != null ? Number(normalized().defaultVal) : props.sliderConfig.defaultValue}
+              value={
+                normalized().defaultVal != null
+                  ? Number(normalized().defaultVal)
+                  : props.sliderConfig.defaultValue
+              }
               onInput={(e) => setDefault(Number(e.currentTarget.value))}
             />
             <span class="range-slider-value">
-              {normalized().defaultVal != null ? Number(normalized().defaultVal) : props.sliderConfig.defaultValue}{props.sliderConfig.suffix}
+              {normalized().defaultVal != null
+                ? Number(normalized().defaultVal)
+                : props.sliderConfig.defaultValue}
+              {props.sliderConfig.suffix}
             </span>
           </div>
         ) : (
@@ -173,7 +186,8 @@ export default function PerModelField(props: PerModelFieldProps) {
                       onInput={(e) => setOverride(model, Number(e.currentTarget.value))}
                     />
                     <span class="range-slider-value">
-                      {Number(val)}{props.sliderConfig.suffix}
+                      {Number(val)}
+                      {props.sliderConfig.suffix}
                     </span>
                   </div>
                 ) : (
@@ -185,7 +199,14 @@ export default function PerModelField(props: PerModelFieldProps) {
                     onInput={(e) => setOverride(model, e.currentTarget.value)}
                   />
                 )}
-                <button class="btn sm danger" onClick={() => removeOverride(model)} title="Remove override">✕</button>
+                <button
+                  type="button"
+                  class="btn sm danger"
+                  onClick={() => removeOverride(model)}
+                  title="Remove override"
+                >
+                  ✕
+                </button>
               </div>
             )}
           </For>
@@ -198,16 +219,18 @@ export default function PerModelField(props: PerModelFieldProps) {
           <ModelSelect
             models={availableModels()}
             value={undefined}
-            onChange={(v) => { if (v) addOverride(v); }}
+            onChange={(v) => {
+              if (v) addOverride(v);
+            }}
             placeholder="— Select model for override —"
           />
         </div>
       </Show>
       <button
+        type="button"
         class="btn sm"
         style={{ "margin-top": "6px", "align-self": "flex-start" }}
         onClick={() => setAddingModel(!addingModel())}
-        type="button"
       >
         {addingModel() ? "Cancel" : "+ Per-model override"}
       </button>

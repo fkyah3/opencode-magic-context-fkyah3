@@ -1,6 +1,6 @@
-import { createSignal, For, Show, onCleanup, onMount } from "solid-js";
-import type { DbCacheEvent, SessionCacheStats } from "../../lib/types";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { formatDateTime, getCacheEventsFromDb, getSessions, truncate } from "../../lib/api";
+import type { DbCacheEvent, SessionCacheStats } from "../../lib/types";
 
 // Module-level cache — survives component unmount/remount (page navigation)
 let cachedEvents: DbCacheEvent[] = [];
@@ -29,21 +29,31 @@ export default function CacheDiagnostics() {
       } else if (newEvents.length > 0) {
         // Incremental — prepend new events (they're newest-first from DB, but
         // build_db_cache_events reverses to chronological), trim to 200
-        setEvents(prev => [...prev, ...newEvents].slice(-200));
+        setEvents((prev) => [...prev, ...newEvents].slice(-200));
       }
 
       // Sync to module-level cache and update watermark
       const allEvents = events();
       cachedEvents = allEvents;
       if (allEvents.length > 0) {
-        cachedWatermark = Math.max(...allEvents.map(e => e.timestamp));
+        cachedWatermark = Math.max(...allEvents.map((e) => e.timestamp));
       }
 
       // Compute session stats client-side from cached events (no extra DB query)
-      const statsMap = new Map<string, { count: number; read: number; write: number; input: number; lastTs: number; busts: number }>();
+      const statsMap = new Map<
+        string,
+        { count: number; read: number; write: number; input: number; lastTs: number; busts: number }
+      >();
       for (const e of allEvents) {
         if (!e.session_id) continue;
-        const s = statsMap.get(e.session_id) ?? { count: 0, read: 0, write: 0, input: 0, lastTs: 0, busts: 0 };
+        const s = statsMap.get(e.session_id) ?? {
+          count: 0,
+          read: 0,
+          write: 0,
+          input: 0,
+          lastTs: 0,
+          busts: 0,
+        };
         s.count++;
         s.read += e.cache_read;
         s.write += e.cache_write;
@@ -83,10 +93,11 @@ export default function CacheDiagnostics() {
     }
   };
 
-  const resolveTitle = (sessionId: string) =>
-    sessionNames()[sessionId] || truncate(sessionId, 16);
+  const resolveTitle = (sessionId: string) => sessionNames()[sessionId] || truncate(sessionId, 16);
 
-  onMount(() => { fetchData(); });
+  onMount(() => {
+    fetchData();
+  });
 
   const refreshInterval = setInterval(() => {
     if (!paused()) fetchData();
@@ -97,25 +108,31 @@ export default function CacheDiagnostics() {
 
   const filteredStats = () => {
     const stats = sessionStats();
-    const filtered = hideSubagents() ? stats.filter(s => !isSubagent(s.session_id)) : stats;
+    const filtered = hideSubagents() ? stats.filter((s) => !isSubagent(s.session_id)) : stats;
     return filtered.slice(0, 5);
   };
 
   const filteredEvents = () => {
     const sid = selectedSession();
     let all = events();
-    if (hideSubagents()) all = all.filter(e => !isSubagent(e.session_id));
-    return sid ? all.filter(e => e.session_id === sid) : all;
+    if (hideSubagents()) all = all.filter((e) => !isSubagent(e.session_id));
+    return sid ? all.filter((e) => e.session_id === sid) : all;
   };
 
   const severityIcon = (severity: string) => {
     switch (severity) {
-      case "stable": return "🟢";
-      case "info": return "🔵";
-      case "warning": return "🟡";
-      case "bust": return "🔴";
-      case "full_bust": return "⚫";
-      default: return "⚪";
+      case "stable":
+        return "🟢";
+      case "info":
+        return "🔵";
+      case "warning":
+        return "🟡";
+      case "bust":
+        return "🔴";
+      case "full_bust":
+        return "⚫";
+      default:
+        return "⚪";
     }
   };
 
@@ -134,15 +151,19 @@ export default function CacheDiagnostics() {
         <h1 class="section-title">Cache Diagnostics</h1>
         <div class="section-actions">
           <Show when={!paused()}>
-            <span style={{ color: "var(--green)", "font-size": "12px", "margin-right": "8px" }}>● Live</span>
+            <span style={{ color: "var(--green)", "font-size": "12px", "margin-right": "8px" }}>
+              ● Live
+            </span>
           </Show>
           <button
+            type="button"
             class={`btn sm ${!hideSubagents() ? "primary" : ""}`}
             onClick={() => setHideSubagents(!hideSubagents())}
           >
             {hideSubagents() ? "Show subagents" : "Hide subagents"}
           </button>
           <button
+            type="button"
             class={`btn sm ${paused() ? "primary" : ""}`}
             onClick={() => setPaused(!paused())}
           >
@@ -154,11 +175,14 @@ export default function CacheDiagnostics() {
       {/* Session cards */}
       <div style={{ padding: "0 20px 12px" }}>
         <Show when={filteredStats().length > 0}>
-          <div style={{ "font-size": "11px", color: "var(--text-secondary)", "margin-bottom": "8px" }}>
+          <div
+            style={{ "font-size": "11px", color: "var(--text-secondary)", "margin-bottom": "8px" }}
+          >
             Recent Sessions
             <Show when={selectedSession()}>
               <span> · </span>
               <button
+                type="button"
                 class="btn sm"
                 style={{ padding: "1px 6px", "font-size": "10px", "margin-left": "4px" }}
                 onClick={() => setSelectedSession(null)}
@@ -172,7 +196,8 @@ export default function CacheDiagnostics() {
               {(stat) => {
                 const isActive = () => selectedSession() === stat.session_id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     class="card"
                     style={{
                       cursor: "pointer",
@@ -180,13 +205,30 @@ export default function CacheDiagnostics() {
                       "min-width": "140px",
                       "max-width": "220px",
                       "border-color": isActive() ? "var(--accent)" : undefined,
+                      "text-align": "left",
                     }}
                     onClick={() => setSelectedSession(isActive() ? null : stat.session_id)}
                   >
-                    <div style={{ "font-size": "11px", color: "var(--text-muted)", "margin-bottom": "4px", overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                    <div
+                      style={{
+                        "font-size": "11px",
+                        color: "var(--text-muted)",
+                        "margin-bottom": "4px",
+                        overflow: "hidden",
+                        "text-overflow": "ellipsis",
+                        "white-space": "nowrap",
+                      }}
+                    >
                       {resolveTitle(stat.session_id)}
                     </div>
-                    <div style={{ "font-size": "20px", "font-weight": "700", color: hitColor(stat.hit_ratio), "font-family": "var(--mono-font)" }}>
+                    <div
+                      style={{
+                        "font-size": "20px",
+                        "font-weight": "700",
+                        color: hitColor(stat.hit_ratio),
+                        "font-family": "var(--mono-font)",
+                      }}
+                    >
                       {(stat.hit_ratio * 100).toFixed(1)}%
                     </div>
                     <div class="card-meta" style={{ "margin-top": "4px" }}>
@@ -195,7 +237,7 @@ export default function CacheDiagnostics() {
                         <span style={{ color: "var(--red)" }}>{stat.bust_count} busts</span>
                       </Show>
                     </div>
-                  </div>
+                  </button>
                 );
               }}
             </For>
@@ -207,7 +249,15 @@ export default function CacheDiagnostics() {
       <div style={{ padding: "0 20px 12px" }}>
         <Show when={filteredEvents().length > 0}>
           <div class="chart-container">
-            <div style={{ "font-size": "11px", color: "var(--text-secondary)", "margin-bottom": "8px", display: "flex", "justify-content": "space-between" }}>
+            <div
+              style={{
+                "font-size": "11px",
+                color: "var(--text-secondary)",
+                "margin-bottom": "8px",
+                display: "flex",
+                "justify-content": "space-between",
+              }}
+            >
               <span>Cache Hit Timeline</span>
               <span>{filteredEvents().length} events</span>
             </div>
@@ -228,19 +278,14 @@ export default function CacheDiagnostics() {
 
       {/* Event log */}
       <div class="scroll-area">
-        <Show
-          when={!loading()}
-          fallback={<div class="empty-state">Loading cache events...</div>}
-        >
+        <Show when={!loading()} fallback={<div class="empty-state">Loading cache events...</div>}>
           <Show
             when={filteredEvents().length > 0}
             fallback={
               <div class="empty-state">
                 <span class="empty-state-icon">📊</span>
                 <span>No cache events found</span>
-                <span style={{ "font-size": "11px" }}>
-                  Cache data is read from OpenCode DB
-                </span>
+                <span style={{ "font-size": "11px" }}>Cache data is read from OpenCode DB</span>
               </div>
             }
           >
@@ -250,20 +295,42 @@ export default function CacheDiagnostics() {
                   const totalPrompt = event.cache_read + event.cache_write + event.input_tokens;
                   return (
                     <div class="card">
-                      <div style={{ display: "flex", "align-items": "center", gap: "8px", "margin-bottom": "4px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          "align-items": "center",
+                          gap: "8px",
+                          "margin-bottom": "4px",
+                        }}
+                      >
                         <span>{severityIcon(event.severity)}</span>
-                        <span class="mono" style={{ "font-size": "11px", color: "var(--text-secondary)" }}>
+                        <span
+                          class="mono"
+                          style={{ "font-size": "11px", color: "var(--text-secondary)" }}
+                        >
                           {formatDateTime(event.timestamp)}
                         </span>
-                        <span class={`pill ${event.severity === "stable" ? "green" : event.severity === "info" ? "blue" : event.severity === "warning" ? "amber" : "red"}`}>
-                          {event.severity === "full_bust" ? "FULL BUST" : event.severity === "info" ? "NEW SESSION" : event.severity.toUpperCase()}
+                        <span
+                          class={`pill ${event.severity === "stable" ? "green" : event.severity === "info" ? "blue" : event.severity === "warning" ? "amber" : "red"}`}
+                        >
+                          {event.severity === "full_bust"
+                            ? "FULL BUST"
+                            : event.severity === "info"
+                              ? "NEW SESSION"
+                              : event.severity.toUpperCase()}
                         </span>
-                        <span class="mono" style={{ "font-size": "10px", color: "var(--text-muted)" }}>
+                        <span
+                          class="mono"
+                          style={{ "font-size": "10px", color: "var(--text-muted)" }}
+                        >
                           {resolveTitle(event.session_id)}
                         </span>
                       </div>
                       <div class="card-meta" style={{ gap: "12px" }}>
-                        <span class="mono" style={{ color: hitColor(event.hit_ratio), "font-weight": "600" }}>
+                        <span
+                          class="mono"
+                          style={{ color: hitColor(event.hit_ratio), "font-weight": "600" }}
+                        >
                           {(event.hit_ratio * 100).toFixed(1)}%
                         </span>
                         <span class="mono">prompt={totalPrompt.toLocaleString()}</span>
@@ -277,7 +344,13 @@ export default function CacheDiagnostics() {
                         </div>
                       </div>
                       <Show when={event.cause}>
-                        <div style={{ "margin-top": "6px", "font-size": "11px", color: "var(--amber)" }}>
+                        <div
+                          style={{
+                            "margin-top": "6px",
+                            "font-size": "11px",
+                            color: "var(--amber)",
+                          }}
+                        >
                           Cause: {event.cause}
                         </div>
                       </Show>

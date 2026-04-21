@@ -1,4 +1,4 @@
-import { createSignal, createMemo, For, Show, onCleanup } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 
 interface ModelSelectProps {
   models: string[];
@@ -28,9 +28,7 @@ export default function ModelSelect(props: ModelSelectProps) {
   // Group models by provider
   const grouped = createMemo(() => {
     const q = search().toLowerCase();
-    const filtered = q
-      ? props.models.filter((m) => m.toLowerCase().includes(q))
-      : props.models;
+    const filtered = q ? props.models.filter((m) => m.toLowerCase().includes(q)) : props.models;
 
     const groups: Record<string, string[]> = {};
     for (const m of filtered) {
@@ -77,11 +75,7 @@ export default function ModelSelect(props: ModelSelectProps) {
   return (
     <div class="model-select" ref={containerRef}>
       {/* Trigger button */}
-      <button
-        class="model-select-trigger"
-        onClick={openDropdown}
-        type="button"
-      >
+      <button class="model-select-trigger" onClick={openDropdown} type="button">
         <span class={`model-select-value ${!props.value ? "placeholder" : ""}`}>
           {props.value ? (
             <>
@@ -94,7 +88,15 @@ export default function ModelSelect(props: ModelSelectProps) {
         </span>
         <span class="model-select-actions">
           <Show when={props.value}>
-            <span class="model-select-clear" onClick={clearSelection} title="Clear selection">✕</span>
+            <button
+              type="button"
+              class="model-select-clear"
+              onClick={clearSelection}
+              title="Clear selection"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+            >
+              ✕
+            </button>
           </Show>
           <span class="model-select-chevron">▾</span>
         </span>
@@ -112,14 +114,15 @@ export default function ModelSelect(props: ModelSelectProps) {
               value={search()}
               onInput={(e) => setSearch(e.currentTarget.value)}
               onKeyDown={(e) => {
-                if (e.key === "Escape") { setOpen(false); stopListening(); }
+                if (e.key === "Escape") {
+                  setOpen(false);
+                  stopListening();
+                }
               }}
             />
           </div>
           <div class="model-select-options">
-            <For each={grouped()} fallback={
-              <div class="model-select-empty">No models found</div>
-            }>
+            <For each={grouped()} fallback={<div class="model-select-empty">No models found</div>}>
               {([provider, models]) => (
                 <div class="model-select-group">
                   <div class="model-select-group-label">{provider}</div>

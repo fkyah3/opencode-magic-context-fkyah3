@@ -1,13 +1,12 @@
-import { createSignal, createResource, For, Show } from "solid-js";
-import type { UserMemory, UserMemoryCandidate } from "../../lib/types";
+import { createResource, createSignal, For, Show } from "solid-js";
 import {
-  getUserMemories,
-  getUserMemoryCandidates,
-  dismissUserMemory,
   deleteUserMemory,
   deleteUserMemoryCandidate,
-  promoteUserMemoryCandidate,
+  dismissUserMemory,
   formatRelativeTime,
+  getUserMemories,
+  getUserMemoryCandidates,
+  promoteUserMemoryCandidate,
   truncate,
 } from "../../lib/api";
 import FilterSelect from "../shared/FilterSelect";
@@ -17,19 +16,14 @@ export default function UserMemories() {
   const [error, setError] = createSignal<string | null>(null);
 
   const fetchMemories = () => ({ status: statusFilter() || undefined });
-  const [memories, { refetch: refetchMemories }] = createResource(
-    fetchMemories,
-    (params) => getUserMemories(params.status),
+  const [memories, { refetch: refetchMemories }] = createResource(fetchMemories, (params) =>
+    getUserMemories(params.status),
   );
 
-  const [candidates, { refetch: refetchCandidates }] = createResource(
-    getUserMemoryCandidates,
-  );
+  const [candidates, { refetch: refetchCandidates }] = createResource(getUserMemoryCandidates);
 
-  const activeMemories = () =>
-    (memories() ?? []).filter((m) => m.status === "active");
-  const dismissedMemories = () =>
-    (memories() ?? []).filter((m) => m.status === "dismissed");
+  const activeMemories = () => (memories() ?? []).filter((m) => m.status === "active");
+  const dismissedMemories = () => (memories() ?? []).filter((m) => m.status === "dismissed");
 
   const handleDismiss = async (id: number) => {
     try {
@@ -37,9 +31,7 @@ export default function UserMemories() {
       await dismissUserMemory(id);
       refetchMemories();
     } catch (e: unknown) {
-      setError(
-        `Failed to dismiss memory: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setError(`Failed to dismiss memory: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -49,9 +41,7 @@ export default function UserMemories() {
       await deleteUserMemory(id);
       refetchMemories();
     } catch (e: unknown) {
-      setError(
-        `Failed to delete memory: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setError(`Failed to delete memory: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -61,9 +51,7 @@ export default function UserMemories() {
       await deleteUserMemoryCandidate(id);
       refetchCandidates();
     } catch (e: unknown) {
-      setError(
-        `Failed to delete candidate: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setError(`Failed to delete candidate: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -74,9 +62,7 @@ export default function UserMemories() {
       refetchCandidates();
       refetchMemories();
     } catch (e: unknown) {
-      setError(
-        `Failed to promote candidate: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setError(`Failed to promote candidate: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -93,7 +79,7 @@ export default function UserMemories() {
 
   const truncateSessionId = (sessionId: string) => {
     if (sessionId.length <= 12) return sessionId;
-    return sessionId.slice(0, 8) + "…";
+    return `${sessionId.slice(0, 8)}…`;
   };
 
   return (
@@ -116,6 +102,7 @@ export default function UserMemories() {
           >
             <span>{error()}</span>
             <button
+              type="button"
               class="btn sm"
               onClick={() => setError(null)}
               style={{ "min-width": "auto", padding: "2px 8px" }}
@@ -156,7 +143,9 @@ export default function UserMemories() {
         <div class="list-gap" style={{ "margin-bottom": "24px" }}>
           <div class="category-header">
             Stable User Memories
-            <span class="category-count">({activeMemories().length + dismissedMemories().length})</span>
+            <span class="category-count">
+              ({activeMemories().length + dismissedMemories().length})
+            </span>
           </div>
 
           <Show
@@ -188,20 +177,15 @@ export default function UserMemories() {
                       {truncate(memory.content, 120)}
                     </div>
                     <div class="card-meta">
-                      <span class={`pill ${statusPillClass(memory.status)}`}>
-                        {memory.status}
-                      </span>
+                      <span class={`pill ${statusPillClass(memory.status)}`}>{memory.status}</span>
                       <Show when={memory.promoted_at}>
-                        <span>promoted {formatRelativeTime(memory.promoted_at!)}</span>
+                        {(t) => <span>promoted {formatRelativeTime(t())}</span>}
                       </Show>
                       <Show
-                        when={
-                          memory.source_candidate_ids &&
-                          memory.source_candidate_ids.length > 0
-                        }
+                        when={memory.source_candidate_ids && memory.source_candidate_ids.length > 0}
                       >
                         <span style={{ color: "var(--text-muted)" }}>
-                          from candidates: {memory.source_candidate_ids!.join(", ")}
+                          from candidates: {memory.source_candidate_ids?.join(", ")}
                         </span>
                       </Show>
                       <span>{formatRelativeTime(memory.created_at)}</span>
@@ -216,6 +200,7 @@ export default function UserMemories() {
                     >
                       <Show when={memory.status === "active"}>
                         <button
+                          type="button"
                           class="btn sm"
                           onClick={() => handleDismiss(memory.id)}
                         >
@@ -223,6 +208,7 @@ export default function UserMemories() {
                         </button>
                       </Show>
                       <button
+                        type="button"
                         class="btn sm danger"
                         onClick={() => handleDeleteMemory(memory.id)}
                       >
@@ -278,8 +264,7 @@ export default function UserMemories() {
                       </span>
                       <Show
                         when={
-                          candidate.source_compartment_start &&
-                          candidate.source_compartment_end
+                          candidate.source_compartment_start && candidate.source_compartment_end
                         }
                       >
                         <span style={{ color: "var(--text-muted)" }}>
@@ -298,12 +283,14 @@ export default function UserMemories() {
                       }}
                     >
                       <button
+                        type="button"
                         class="btn sm"
                         onClick={() => handlePromoteCandidate(candidate.id)}
                       >
                         Promote
                       </button>
                       <button
+                        type="button"
                         class="btn sm danger"
                         onClick={() => handleDeleteCandidate(candidate.id)}
                       >

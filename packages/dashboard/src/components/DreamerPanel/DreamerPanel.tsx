@@ -1,5 +1,4 @@
 import { createMemo, createResource, createSignal, For, Show } from "solid-js";
-import type { DreamQueueEntry, DreamRun, DreamRunMemoryChanges, DreamRunTask, ProjectInfo } from "../../lib/types";
 import {
   enqueueDream,
   formatDateTime,
@@ -9,6 +8,13 @@ import {
   getDreamState,
   getProjects,
 } from "../../lib/api";
+import type {
+  DreamQueueEntry,
+  DreamRun,
+  DreamRunMemoryChanges,
+  DreamRunTask,
+  ProjectInfo,
+} from "../../lib/types";
 
 type ProjectRunGroup = {
   project: ProjectInfo | undefined;
@@ -43,7 +49,7 @@ function getProjectLabel(project: ProjectInfo | undefined, projectPath: string):
   if (project) return project.label;
   if (projectPath.startsWith("git:")) return `${projectPath.slice(0, 14)}…`;
   const segments = projectPath.split("/").filter(Boolean);
-  return segments.length > 0 ? segments[segments.length - 1]! : projectPath;
+  return segments.length > 0 ? (segments[segments.length - 1] ?? "") : projectPath;
 }
 
 function hasMemoryChanges(changes: DreamRunMemoryChanges | null): changes is DreamRunMemoryChanges {
@@ -142,8 +148,12 @@ export default function DreamerPanel() {
       <div class="section-header">
         <h1 class="section-title">Dreamer</h1>
         <div class="section-actions">
-          <button class="btn primary sm" onClick={handleRunNow}>▶ Run Now</button>
-          <button class="btn sm" onClick={refreshAll}>↻ Refresh</button>
+          <button type="button" class="btn primary sm" onClick={handleRunNow}>
+            ▶ Run Now
+          </button>
+          <button type="button" class="btn sm" onClick={refreshAll}>
+            ↻ Refresh
+          </button>
         </div>
       </div>
 
@@ -151,7 +161,9 @@ export default function DreamerPanel() {
         <div class="stat-banner">
           <div class="stat-item">
             <span class="stat-label">State</span>
-            <span class="stat-value">{leaseState().leaseHolder === "none" ? "idle" : "running"}</span>
+            <span class="stat-value">
+              {leaseState().leaseHolder === "none" ? "idle" : "running"}
+            </span>
           </div>
           <div class="stat-item">
             <span class="stat-label">Lease</span>
@@ -160,18 +172,22 @@ export default function DreamerPanel() {
           <Show when={leaseState().lastRunTime}>
             <div class="stat-item">
               <span class="stat-label">Last Run</span>
-              <span class="stat-value">{(() => {
-                const v = leaseState().lastRunTime;
-                if (!v) return "—";
-                const n = Number(v);
-                return !Number.isNaN(n) && n > 1e12 ? `${formatRelativeTime(n)} · ${formatDateTime(n)}` : v;
-              })()}</span>
+              <span class="stat-value">
+                {(() => {
+                  const v = leaseState().lastRunTime;
+                  if (!v) return "—";
+                  const n = Number(v);
+                  return !Number.isNaN(n) && n > 1e12
+                    ? `${formatRelativeTime(n)} · ${formatDateTime(n)}`
+                    : v;
+                })()}
+              </span>
             </div>
           </Show>
           <Show when={!leaseState().lastRunTime && latestRecordedRun()}>
             <div class="stat-item">
               <span class="stat-label">Last Run</span>
-              <span class="stat-value">{`${formatRelativeTime(latestRecordedRun()!.finished_at)} · ${formatDateTime(latestRecordedRun()!.finished_at)}`}</span>
+              <span class="stat-value">{`${formatRelativeTime(latestRecordedRun()?.finished_at ?? 0)} · ${formatDateTime(latestRecordedRun()?.finished_at ?? 0)}`}</span>
             </div>
           </Show>
           <div class="stat-item">
@@ -187,7 +203,9 @@ export default function DreamerPanel() {
 
       <div class="scroll-area">
         <Show when={pendingQueue().length > 0}>
-          <div class="category-header">Queue <span class="category-count">({pendingQueue().length})</span></div>
+          <div class="category-header">
+            Queue <span class="category-count">({pendingQueue().length})</span>
+          </div>
           <div class="list-gap" style={{ "margin-bottom": "16px" }}>
             <For each={pendingQueue()}>
               {(entry: DreamQueueEntry) => (
@@ -220,11 +238,15 @@ export default function DreamerPanel() {
               <div class="empty-state">
                 <span class="empty-state-icon">🌙</span>
                 <span>No dream runs yet</span>
-                <span style={{ "font-size": "11px" }}>Run the dreamer to start building project history.</span>
+                <span style={{ "font-size": "11px" }}>
+                  Run the dreamer to start building project history.
+                </span>
               </div>
             }
           >
-            <div class="category-header">Run History <span class="category-count">({groupedRuns().length})</span></div>
+            <div class="category-header">
+              Run History <span class="category-count">({groupedRuns().length})</span>
+            </div>
             <div class="list-gap">
               <For each={groupedRuns()}>
                 {(group) => {
@@ -237,27 +259,39 @@ export default function DreamerPanel() {
                   return (
                     <div class="card dream-run-card">
                       <button
+                        type="button"
                         class="dream-run-header"
                         onClick={() => toggleProject(group.projectPath)}
                       >
                         <div>
                           <div class="dream-run-title-row">
-                            <span class="card-title" style={{ margin: 0 }}>{getProjectLabel(group.project, group.projectPath)}</span>
-                            <span class="pill blue">{group.runs.length} run{group.runs.length === 1 ? "" : "s"}</span>
+                            <span class="card-title" style={{ margin: 0 }}>
+                              {getProjectLabel(group.project, group.projectPath)}
+                            </span>
+                            <span class="pill blue">
+                              {group.runs.length} run{group.runs.length === 1 ? "" : "s"}
+                            </span>
                           </div>
                           <div class="card-meta" style={{ "margin-top": "4px" }}>
-                            <span>Last run: {formatRelativeTime(latestRun()!.finished_at)}</span>
+                            <span>Last run: {formatRelativeTime(latestRun()?.finished_at)}</span>
                             <span>·</span>
-                            <span>{formatDateTime(latestRun()!.finished_at)}</span>
+                            <span>{formatDateTime(latestRun()?.finished_at)}</span>
                             <span>·</span>
                             <span>Duration: {latestDuration()}</span>
-                            <Show when={group.projectPath !== getProjectLabel(group.project, group.projectPath)}>
+                            <Show
+                              when={
+                                group.projectPath !==
+                                getProjectLabel(group.project, group.projectPath)
+                              }
+                            >
                               <span>·</span>
                               <span class="mono">{group.projectPath}</span>
                             </Show>
                           </div>
                         </div>
-                        <span class="dream-run-chevron">{isExpanded(group.projectPath) ? "▾" : "▸"}</span>
+                        <span class="dream-run-chevron">
+                          {isExpanded(group.projectPath) ? "▾" : "▸"}
+                        </span>
                       </button>
 
                       <Show when={isExpanded(group.projectPath)}>
@@ -267,15 +301,21 @@ export default function DreamerPanel() {
                               <section class="dream-run-detail">
                                 <div class="dream-run-detail-header">
                                   <div>
-                                    <div class="dream-run-detail-title">{formatRelativeTime(run.finished_at)}</div>
+                                    <div class="dream-run-detail-title">
+                                      {formatRelativeTime(run.finished_at)}
+                                    </div>
                                     <div class="card-meta">
                                       <span>{formatDateTime(run.finished_at)}</span>
                                       <span>·</span>
-                                      <span>{formatDuration(run.finished_at - run.started_at)}</span>
+                                      <span>
+                                        {formatDuration(run.finished_at - run.started_at)}
+                                      </span>
                                       <span>·</span>
                                       <span>{run.tasks_succeeded} succeeded</span>
                                       <Show when={run.tasks_failed > 0}>
-                                        <span style={{ color: "var(--red)" }}>{run.tasks_failed} failed</span>
+                                        <span style={{ color: "var(--red)" }}>
+                                          {run.tasks_failed} failed
+                                        </span>
                                       </Show>
                                     </div>
                                   </div>
@@ -301,7 +341,9 @@ export default function DreamerPanel() {
                                           <td class="mono">{formatDuration(task.durationMs)}</td>
                                           <td class="mono">{formatTaskOutput(task, run)}</td>
                                           <td>
-                                            <span class={`dream-run-status ${task.error ? "error" : "success"}`}>
+                                            <span
+                                              class={`dream-run-status ${task.error ? "error" : "success"}`}
+                                            >
                                               {task.error ? "✕" : "✓"}
                                             </span>
                                           </td>
@@ -356,7 +398,9 @@ export default function DreamerPanel() {
         </Show>
 
         <Show when={completedQueue().length > 0}>
-          <div class="category-header" style={{ "margin-top": "16px" }}>Queue History <span class="category-count">({completedQueue().length})</span></div>
+          <div class="category-header" style={{ "margin-top": "16px" }}>
+            Queue History <span class="category-count">({completedQueue().length})</span>
+          </div>
           <div class="list-gap">
             <For each={completedQueue()}>
               {(entry: DreamQueueEntry) => (
@@ -368,7 +412,7 @@ export default function DreamerPanel() {
                   <div class="card-meta">
                     <span>Project: {entry.project_path}</span>
                     <span>·</span>
-                    <span>Started: {formatRelativeTime(entry.started_at!)}</span>
+                    <span>Started: {formatRelativeTime(entry.started_at ?? 0)}</span>
                   </div>
                 </div>
               )}
@@ -376,7 +420,13 @@ export default function DreamerPanel() {
           </div>
         </Show>
 
-        <Show when={(queue() ?? []).length === 0 && (state() ?? []).length === 0 && (runs() ?? []).length === 0}>
+        <Show
+          when={
+            (queue() ?? []).length === 0 &&
+            (state() ?? []).length === 0 &&
+            (runs() ?? []).length === 0
+          }
+        >
           <div class="empty-state">
             <span class="empty-state-icon">🌙</span>
             <span>No dreamer activity</span>

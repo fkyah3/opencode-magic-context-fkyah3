@@ -1,17 +1,17 @@
-import { createSignal, createResource, Show, onMount, onCleanup, ErrorBoundary } from "solid-js";
-import type { NavSection, DbHealth } from "./lib/types";
-import { getDbHealth, getAvailableModels } from "./lib/api";
-import { checkForUpdate, installAndRelaunch, runUpdater } from "./lib/updater";
 import { listen } from "@tauri-apps/api/event";
+import { createResource, createSignal, ErrorBoundary, onCleanup, onMount, Show } from "solid-js";
+import CacheDiagnostics from "./components/CacheDiagnostics/CacheDiagnostics";
+import ConfigEditor from "./components/ConfigEditor/ConfigEditor";
+import DreamerPanel from "./components/DreamerPanel/DreamerPanel";
 import Sidebar from "./components/Layout/Sidebar";
 import StatusBar from "./components/Layout/StatusBar";
+import LogViewer from "./components/LogViewer/LogViewer";
 import MemoryBrowser from "./components/MemoryBrowser/MemoryBrowser";
 import SessionViewer from "./components/SessionViewer/SessionViewer";
-import CacheDiagnostics from "./components/CacheDiagnostics/CacheDiagnostics";
-import DreamerPanel from "./components/DreamerPanel/DreamerPanel";
 import UserMemories from "./components/UserMemories/UserMemories";
-import ConfigEditor from "./components/ConfigEditor/ConfigEditor";
-import LogViewer from "./components/LogViewer/LogViewer";
+import { getAvailableModels, getDbHealth } from "./lib/api";
+import type { NavSection } from "./lib/types";
+import { checkForUpdate, installAndRelaunch, runUpdater } from "./lib/updater";
 
 const MODELS_CACHE_KEY = "mc_dashboard_models_cache";
 const UPDATE_POLL_INTERVAL = 10 * 60 * 1000; // 10 minutes
@@ -20,7 +20,9 @@ function loadCachedModels(): string[] {
   try {
     const raw = localStorage.getItem(MODELS_CACHE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 export default function App() {
@@ -33,10 +35,16 @@ export default function App() {
 
   // Background model refresh
   onMount(() => {
-    getAvailableModels().then((fresh) => {
-      setAvailableModels(fresh);
-      try { localStorage.setItem(MODELS_CACHE_KEY, JSON.stringify(fresh)); } catch {}
-    }).catch(() => { /* keep cached */ });
+    getAvailableModels()
+      .then((fresh) => {
+        setAvailableModels(fresh);
+        try {
+          localStorage.setItem(MODELS_CACHE_KEY, JSON.stringify(fresh));
+        } catch {}
+      })
+      .catch(() => {
+        /* keep cached */
+      });
   });
 
   // Background update polling
@@ -52,16 +60,22 @@ export default function App() {
     poll();
     updateInterval = setInterval(poll, UPDATE_POLL_INTERVAL);
   });
-  onCleanup(() => { if (updateInterval) clearInterval(updateInterval); });
+  onCleanup(() => {
+    if (updateInterval) clearInterval(updateInterval);
+  });
 
   // Listen for "Check for Updates" tray menu event
   let unlistenUpdate: (() => void) | undefined;
   onMount(() => {
     listen("check-for-updates", () => {
       runUpdater({ alertOnFail: true });
-    }).then((unlisten) => { unlistenUpdate = unlisten; });
+    }).then((unlisten) => {
+      unlistenUpdate = unlisten;
+    });
   });
-  onCleanup(() => { unlistenUpdate?.(); });
+  onCleanup(() => {
+    unlistenUpdate?.();
+  });
 
   const handleInstall = async () => {
     setUpdateInstalling(true);
@@ -87,29 +101,31 @@ export default function App() {
             </div>
             <div class="update-toast-actions">
               <button
+                type="button"
                 class="btn primary sm"
                 disabled={updateInstalling()}
                 onClick={handleInstall}
               >
                 {updateInstalling() ? "Installing..." : "Install & Restart"}
               </button>
-              <button
-                class="btn sm"
-                onClick={() => setUpdateDismissed(true)}
-              >
+              <button type="button" class="btn sm" onClick={() => setUpdateDismissed(true)}>
                 Later
               </button>
             </div>
           </div>
         </Show>
 
-        <ErrorBoundary fallback={(err, reset) => (
-          <div class="error-boundary">
-            <h2>Something went wrong</h2>
-            <p>{err?.message || "An unexpected error occurred"}</p>
-            <button class="btn primary" onClick={reset}>Try Again</button>
-          </div>
-        )}>
+        <ErrorBoundary
+          fallback={(err, reset) => (
+            <div class="error-boundary">
+              <h2>Something went wrong</h2>
+              <p>{err?.message || "An unexpected error occurred"}</p>
+              <button type="button" class="btn primary" onClick={reset}>
+                Try Again
+              </button>
+            </div>
+          )}
+        >
           <Show when={activeSection() === "memories"}>
             <MemoryBrowser />
           </Show>

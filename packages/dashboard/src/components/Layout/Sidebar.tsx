@@ -20,6 +20,7 @@ export default function Sidebar(props: Props) {
     <nav class="nav">
       {NAV_ITEMS.map((item) => (
         <button
+          type="button"
           class={`nav-item ${props.active === item.id ? "active" : ""}`}
           onClick={() => props.onNavigate(item.id)}
           title={item.label}

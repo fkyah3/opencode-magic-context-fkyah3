@@ -1,6 +1,6 @@
 import { Show } from "solid-js";
-import type { DbHealth } from "../../lib/types";
 import { formatBytes } from "../../lib/api";
+import type { DbHealth } from "../../lib/types";
 
 interface Props {
   health: DbHealth | undefined;

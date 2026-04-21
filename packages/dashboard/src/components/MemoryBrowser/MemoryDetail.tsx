@@ -1,6 +1,6 @@
-import { createSignal, createEffect, Show } from "solid-js";
-import type { Memory } from "../../lib/types";
+import { createEffect, createSignal, Show } from "solid-js";
 import { formatTimestamp } from "../../lib/api";
+import type { Memory } from "../../lib/types";
 import FilterSelect from "../shared/FilterSelect";
 
 interface Props {
@@ -47,11 +47,32 @@ export default function MemoryDetail(props: Props) {
 
   return (
     <div class="slide-panel-overlay">
-      <div class="slide-panel-backdrop" onClick={props.onClose} />
+      <button
+        type="button"
+        class="slide-panel-backdrop"
+        onClick={props.onClose}
+        style={{
+          background: "transparent",
+          border: "none",
+          position: "absolute",
+          inset: 0,
+          cursor: "pointer",
+        }}
+        aria-label="Close panel"
+      />
       <div class="slide-panel">
-        <div style={{ display: "flex", "justify-content": "space-between", "align-items": "center", "margin-bottom": "16px" }}>
+        <div
+          style={{
+            display: "flex",
+            "justify-content": "space-between",
+            "align-items": "center",
+            "margin-bottom": "16px",
+          }}
+        >
           <h2 style={{ "font-size": "15px", "font-weight": "600" }}>Memory #{props.memory.id}</h2>
-          <button class="btn sm" onClick={props.onClose}>✕ Close</button>
+          <button type="button" class="btn sm" onClick={props.onClose}>
+            ✕ Close
+          </button>
         </div>
 
         {/* Metadata */}
@@ -110,7 +131,12 @@ export default function MemoryDetail(props: Props) {
                 >
                   {props.memory.content}
                 </div>
-                <button class="btn sm" style={{ "margin-top": "8px" }} onClick={() => setEditing(true)}>
+                <button
+                  type="button"
+                  class="btn sm"
+                  style={{ "margin-top": "8px" }}
+                  onClick={() => setEditing(true)}
+                >
                   Edit Content
                 </button>
               </div>
@@ -123,8 +149,17 @@ export default function MemoryDetail(props: Props) {
               onInput={(e) => setEditContent(e.currentTarget.value)}
             />
             <div style={{ display: "flex", gap: "8px", "margin-top": "8px" }}>
-              <button class="btn primary sm" onClick={handleSave}>Save</button>
-              <button class="btn sm" onClick={() => { setEditing(false); setEditContent(props.memory.content); }}>
+              <button type="button" class="btn primary sm" onClick={handleSave}>
+                Save
+              </button>
+              <button
+                type="button"
+                class="btn sm"
+                onClick={() => {
+                  setEditing(false);
+                  setEditContent(props.memory.content);
+                }}
+              >
                 Cancel
               </button>
             </div>
@@ -135,12 +170,30 @@ export default function MemoryDetail(props: Props) {
         <div class="category-header">Stats</div>
         <table class="kv-table" style={{ "margin-bottom": "16px" }}>
           <tbody>
-            <tr><td>Seen</td><td>{props.memory.seen_count} times</td></tr>
-            <tr><td>Retrieved</td><td>{props.memory.retrieval_count} times</td></tr>
-            <tr><td>First seen</td><td>{formatTimestamp(props.memory.first_seen_at)}</td></tr>
-            <tr><td>Last seen</td><td>{formatTimestamp(props.memory.last_seen_at)}</td></tr>
-            <tr><td>Created</td><td>{formatTimestamp(props.memory.created_at)}</td></tr>
-            <tr><td>Updated</td><td>{formatTimestamp(props.memory.updated_at)}</td></tr>
+            <tr>
+              <td>Seen</td>
+              <td>{props.memory.seen_count} times</td>
+            </tr>
+            <tr>
+              <td>Retrieved</td>
+              <td>{props.memory.retrieval_count} times</td>
+            </tr>
+            <tr>
+              <td>First seen</td>
+              <td>{formatTimestamp(props.memory.first_seen_at)}</td>
+            </tr>
+            <tr>
+              <td>Last seen</td>
+              <td>{formatTimestamp(props.memory.last_seen_at)}</td>
+            </tr>
+            <tr>
+              <td>Created</td>
+              <td>{formatTimestamp(props.memory.created_at)}</td>
+            </tr>
+            <tr>
+              <td>Updated</td>
+              <td>{formatTimestamp(props.memory.updated_at)}</td>
+            </tr>
           </tbody>
         </table>
 
@@ -159,21 +212,32 @@ export default function MemoryDetail(props: Props) {
         <Show when={mergedFrom()}>
           <div class="category-header">Merge History</div>
           <div style={{ "margin-bottom": "16px", "font-size": "12px" }}>
-            Merged from: {mergedFrom()!.map((id) => `#${id}`).join(", ")}
+            Merged from:{" "}
+            {mergedFrom()
+              ?.map((id) => `#${id}`)
+              .join(", ")}
           </div>
         </Show>
 
         {/* Actions */}
-        <div style={{ display: "flex", gap: "8px", "padding-top": "12px", "border-top": "1px solid var(--border)" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            "padding-top": "12px",
+            "border-top": "1px solid var(--border)",
+          }}
+        >
           <Show when={props.memory.status !== "archived"}>
             <button
+              type="button"
               class="btn sm"
               onClick={() => props.onStatusChange(props.memory.id, "archived")}
             >
               Archive
             </button>
           </Show>
-          <button class="btn sm danger" onClick={handleDelete}>
+          <button type="button" class="btn sm danger" onClick={handleDelete}>
             {confirmDelete() ? "Click again to confirm" : "Delete"}
           </button>
         </div>

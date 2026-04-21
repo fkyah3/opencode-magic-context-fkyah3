@@ -1,21 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  Memory,
-  MemoryStats,
-  SessionSummary,
+  CacheEvent,
   Compartment,
-  SessionFact,
-  Note,
-  SessionMetaRow,
+  ConfigFile,
   ContextTokenBreakdown,
+  DbCacheEvent,
+  DbHealth,
   DreamQueueEntry,
   DreamRun,
   DreamStateEntry,
   LogEntry,
-  CacheEvent,
-  DbCacheEvent,
-  ConfigFile,
-  DbHealth,
+  Memory,
+  MemoryStats,
+  Note,
+  SessionFact,
+  SessionMetaRow,
+  SessionSummary,
   UserMemory,
   UserMemoryCandidate,
 } from "./types";
@@ -48,17 +48,11 @@ export async function getMemoryStats(project?: string): Promise<MemoryStats> {
   return invoke("get_memory_stats", { project: project ?? null });
 }
 
-export async function updateMemoryStatus(
-  memoryId: number,
-  status: string
-): Promise<void> {
+export async function updateMemoryStatus(memoryId: number, status: string): Promise<void> {
   return invoke("update_memory_status", { memoryId, status });
 }
 
-export async function updateMemoryContent(
-  memoryId: number,
-  content: string
-): Promise<void> {
+export async function updateMemoryContent(memoryId: number, content: string): Promise<void> {
   return invoke("update_memory_content", { memoryId, content });
 }
 
@@ -66,10 +60,7 @@ export async function deleteMemory(memoryId: number): Promise<void> {
   return invoke("delete_memory", { memoryId });
 }
 
-export async function bulkUpdateMemoryStatus(
-  memoryIds: number[],
-  status: string
-): Promise<number> {
+export async function bulkUpdateMemoryStatus(memoryIds: number[], status: string): Promise<number> {
   return invoke("bulk_update_memory_status", { memoryIds, status });
 }
 
@@ -83,27 +74,19 @@ export async function getSessions(): Promise<SessionSummary[]> {
   return invoke("get_sessions");
 }
 
-export async function getCompartments(
-  sessionId: string
-): Promise<Compartment[]> {
+export async function getCompartments(sessionId: string): Promise<Compartment[]> {
   return invoke("get_compartments", { sessionId });
 }
 
-export async function getSessionFacts(
-  sessionId: string
-): Promise<SessionFact[]> {
+export async function getSessionFacts(sessionId: string): Promise<SessionFact[]> {
   return invoke("get_session_facts", { sessionId });
 }
 
-export async function getSessionNotes(
-  sessionId: string
-): Promise<Note[]> {
+export async function getSessionNotes(sessionId: string): Promise<Note[]> {
   return invoke("get_session_notes", { sessionId });
 }
 
-export async function getSmartNotes(
-  projectPath: string
-): Promise<Note[]> {
+export async function getSmartNotes(projectPath: string): Promise<Note[]> {
   return invoke("get_smart_notes", { projectPath });
 }
 
@@ -127,26 +110,24 @@ export async function dismissNote(noteId: number): Promise<void> {
   return invoke("dismiss_note", { noteId });
 }
 
-export async function getSessionMeta(
-  sessionId: string
-): Promise<SessionMetaRow | null> {
+export async function getSessionMeta(sessionId: string): Promise<SessionMetaRow | null> {
   return invoke("get_session_meta", { sessionId });
 }
 
 export async function getContextTokenBreakdown(
-  sessionId: string
+  sessionId: string,
 ): Promise<ContextTokenBreakdown | null> {
   return invoke("get_context_token_breakdown", { sessionId });
 }
 
 export async function getSessionCacheStats(
-  limit?: number
+  limit?: number,
 ): Promise<import("./types").SessionCacheStats[]> {
   return invoke("get_session_cache_stats", { maxLines: 5000, limit: limit ?? 5 });
 }
 
 export async function getSessionCacheStatsFromDb(
-  limit?: number
+  limit?: number,
 ): Promise<import("./types").SessionCacheStats[]> {
   return invoke("get_session_cache_stats_from_db", { limit: limit ?? 5 });
 }
@@ -161,40 +142,30 @@ export async function getDreamState(): Promise<DreamStateEntry[]> {
   return invoke("get_dream_state");
 }
 
-export async function getDreamRuns(
-  projectPath?: string,
-  limit?: number,
-): Promise<DreamRun[]> {
+export async function getDreamRuns(projectPath?: string, limit?: number): Promise<DreamRun[]> {
   return invoke("get_dream_runs", {
     projectPath: projectPath ?? null,
     limit: limit ?? 20,
   });
 }
 
-export async function enqueueDream(
-  projectPath: string,
-  reason: string
-): Promise<number> {
+export async function enqueueDream(projectPath: string, reason: string): Promise<number> {
   return invoke("enqueue_dream", { projectPath, reason });
 }
 
 // ── Log & Cache API ─────────────────────────────────────────
 
-export async function getLogEntries(
-  maxLines?: number
-): Promise<LogEntry[]> {
+export async function getLogEntries(maxLines?: number): Promise<LogEntry[]> {
   return invoke("get_log_entries", { maxLines: maxLines ?? 500 });
 }
 
-export async function getCacheEvents(
-  maxLines?: number
-): Promise<CacheEvent[]> {
+export async function getCacheEvents(maxLines?: number): Promise<CacheEvent[]> {
   return invoke("get_cache_events", { maxLines: maxLines ?? 2000 });
 }
 
 export async function getCacheEventsFromDb(
   limit?: number,
-  sinceTimestamp?: number | null
+  sinceTimestamp?: number | null,
 ): Promise<DbCacheEvent[]> {
   return invoke("get_cache_events_from_db", {
     limit: limit ?? 200,
@@ -208,10 +179,7 @@ export async function getConfig(source: string): Promise<ConfigFile> {
   return invoke("get_config", { source });
 }
 
-export async function saveConfig(
-  source: string,
-  content: string
-): Promise<void> {
+export async function saveConfig(source: string, content: string): Promise<void> {
   return invoke("save_config", { source, content });
 }
 
@@ -225,10 +193,7 @@ export async function getProjectConfigs(): Promise<import("./types").ProjectConf
   return invoke("get_project_configs");
 }
 
-export async function saveProjectConfig(
-  projectPath: string,
-  content: string,
-): Promise<void> {
+export async function saveProjectConfig(projectPath: string, content: string): Promise<void> {
   return invoke("save_project_config", { projectPath, content });
 }
 
@@ -299,5 +264,5 @@ export function formatBytes(bytes: number): string {
 
 export function truncate(str: string, max: number): string {
   if (str.length <= max) return str;
-  return str.slice(0, max - 1) + "…";
+  return `${str.slice(0, max - 1)}…`;
 }
