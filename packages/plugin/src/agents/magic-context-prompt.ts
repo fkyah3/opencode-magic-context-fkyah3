@@ -225,20 +225,24 @@ export function detectAgentFromSystemPrompt(systemPrompt: string): AgentType | n
     return null;
 }
 
+const TEMPORAL_AWARENESS_GUIDANCE = `\n**Temporal awareness**: User messages may be preceded by HTML comments like \`<!-- +12m -->\`, \`<!-- +2h 15m -->\`, or \`<!-- +3d 4h -->\` indicating time elapsed since the previous message's completion. Compartments in \`<session-history>\` carry \`start-date\` and \`end-date\` attributes (YYYY-MM-DD) showing real-time boundaries. Use these when reasoning about workflow pacing, log durations, build times, or how long ago something happened.`;
+
 export function buildMagicContextSection(
     agent: AgentType | null,
     protectedTags: number,
     ctxReduceEnabled = true,
     dreamerEnabled = false,
     dropToolStructure = true,
+    temporalAwarenessEnabled = false,
 ): string {
     const smartNoteGuidance = dreamerEnabled
         ? `\nWhen \`surface_condition\` is provided with \`write\`, the note becomes a project-scoped smart note.\nThe dreamer evaluates smart note conditions during nightly runs and surfaces them when conditions are met.\nExample: \`ctx_note(action="write", content="Implement X because Y", surface_condition="When PR #42 is merged in this repo")\``
         : "";
+    const temporalGuidance = temporalAwarenessEnabled ? TEMPORAL_AWARENESS_GUIDANCE : "";
 
     if (!ctxReduceEnabled) {
-        return `## Magic Context\n\n${BASE_INTRO_NO_REDUCE(dropToolStructure)}${smartNoteGuidance}`;
+        return `## Magic Context\n\n${BASE_INTRO_NO_REDUCE(dropToolStructure)}${smartNoteGuidance}${temporalGuidance}`;
     }
     const section = agent ? AGENT_SECTIONS[agent] : GENERIC_SECTION;
-    return `## Magic Context\n\n${BASE_INTRO(protectedTags, dropToolStructure)}${smartNoteGuidance}\n${section}\n\nPrefer many small targeted operations over one large blanket operation. Compress early and often — don't wait for warnings.`;
+    return `## Magic Context\n\n${BASE_INTRO(protectedTags, dropToolStructure)}${smartNoteGuidance}${temporalGuidance}\n${section}\n\nPrefer many small targeted operations over one large blanket operation. Compress early and often — don't wait for warnings.`;
 }

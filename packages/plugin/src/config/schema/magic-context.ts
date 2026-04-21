@@ -181,6 +181,9 @@ export interface MagicContextConfig {
             /** Minimum full-read count before a file is considered for pinning (default: 4) */
             min_reads: number;
         };
+        /** Inject elapsed-time markers between user messages and date ranges on
+         *  compartments so the agent has a wall-clock sense of the session. */
+        temporal_awareness: boolean;
     };
     embedding: EmbeddingConfig;
     memory: {
@@ -346,10 +349,16 @@ export const MagicContextConfigSchema = z
                         min_reads: z.number().min(2).max(20).default(4),
                     })
                     .default({ enabled: false, token_budget: 10000, min_reads: 4 }),
+                /** Inject wall-clock gap markers (<!-- +Xm -->) between user messages
+                 *  where > 5 min elapsed since the previous message, and add start/end
+                 *  date attributes on compartments. Gives the agent a sense of session
+                 *  pacing and "how long ago" across multi-day sessions. Default: false. */
+                temporal_awareness: z.boolean().default(false),
             })
             .default({
                 user_memories: { enabled: false, promotion_threshold: 3 },
                 pin_key_files: { enabled: false, token_budget: 10000, min_reads: 4 },
+                temporal_awareness: false,
             }),
         /** Cross-session memory configuration */
         memory: z

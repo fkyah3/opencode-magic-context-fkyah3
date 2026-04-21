@@ -75,6 +75,49 @@ interface AssistantModelRow {
  *
  * Returns null for brand-new sessions with no assistant turn yet.
  */
+interface MessageTimeRow {
+    id?: string;
+    time_created?: number;
+}
+
+/**
+ * Resolve `time_created` (ms since epoch) for a set of OpenCode message IDs.
+ * Returns a Map keyed by message ID. Missing IDs are simply omitted.
+ *
+ * Used by temporal-awareness to map compartment start/end message IDs to
+ * wall-clock dates for the `start="YYYY-MM-DD"` / `end="YYYY-MM-DD"` attrs
+ * on the `<compartment>` elements in `<session-history>`.
+ */
+export function getMessageTimesFromOpenCodeDb(
+    sessionId: string,
+    messageIds: readonly string[],
+): Map<string, number> {
+    const result = new Map<string, number>();
+    if (messageIds.length === 0) return result;
+
+    try {
+        withReadOnlySessionDb((db) => {
+            // SQLite limits on IN (?, ?, ...) are high (~999 by default) so a
+            // single batched query is safe for any realistic compartment count.
+            const placeholders = messageIds.map(() => "?").join(",");
+            const rows = db
+                .prepare(
+                    `SELECT id, time_created FROM message WHERE session_id = ? AND id IN (${placeholders})`,
+                )
+                .all(sessionId, ...messageIds) as MessageTimeRow[];
+            for (const row of rows) {
+                if (typeof row.id === "string" && typeof row.time_created === "number") {
+                    result.set(row.id, row.time_created);
+                }
+            }
+        });
+    } catch (error) {
+        log("[magic-context] failed to resolve message times from OpenCode DB:", error);
+    }
+
+    return result;
+}
+
 export function findLastAssistantModelFromOpenCodeDb(
     sessionId: string,
 ): { providerID: string; modelID: string } | null {

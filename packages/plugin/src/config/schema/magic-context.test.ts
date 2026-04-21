@@ -80,6 +80,7 @@ describe("MagicContextConfigSchema", () => {
                         token_budget: 10000,
                         min_reads: 4,
                     },
+                    temporal_awareness: false,
                 },
                 embedding: {
                     provider: "openai-compatible",

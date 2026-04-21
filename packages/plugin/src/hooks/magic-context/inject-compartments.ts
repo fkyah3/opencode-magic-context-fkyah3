@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import {
     buildCompartmentBlock,
+    type CompartmentDateRanges,
     escapeXmlContent,
     getCompartments,
     getSessionFacts,
@@ -9,8 +10,10 @@ import { CATEGORY_PRIORITY } from "../../features/magic-context/memory/constants
 import { getMemoriesByProject } from "../../features/magic-context/memory/storage-memory";
 import type { Memory, MemoryCategory } from "../../features/magic-context/memory/types";
 import { sessionLog } from "../../shared/logger";
+import { getMessageTimesFromOpenCodeDb } from "./read-session-db";
 import { estimateTokens } from "./read-session-formatting";
 import type { MessageLike } from "./tag-messages";
+import { formatDate } from "./temporal-awareness";
 
 export interface PreparedCompartmentInjection {
     block: string;
@@ -162,6 +165,7 @@ export function prepareCompartmentInjection(
     isCacheBusting: boolean,
     projectPath?: string,
     injectionBudgetTokens?: number,
+    temporalAwareness?: boolean,
 ): PreparedCompartmentInjection | null {
     // On defer (cache-safe) passes, replay the cached injection result so that
     // historian publications between passes do not bust the prompt-cache prefix.
@@ -249,7 +253,27 @@ export function prepareCompartmentInjection(
         return null;
     }
 
-    const block = buildCompartmentBlock(compartments, facts, memoryBlock);
+    let dateRanges: CompartmentDateRanges | undefined;
+    if (temporalAwareness && compartments.length > 0) {
+        // Resolve start/end message times from OpenCode's DB in a single batched query.
+        const ids = new Set<string>();
+        for (const c of compartments) {
+            if (c.startMessageId) ids.add(c.startMessageId);
+            if (c.endMessageId) ids.add(c.endMessageId);
+        }
+        const times = getMessageTimesFromOpenCodeDb(sessionId, Array.from(ids));
+        const byId = new Map<number, { start: string; end: string }>();
+        for (const c of compartments) {
+            const startMs = times.get(c.startMessageId);
+            const endMs = times.get(c.endMessageId);
+            if (startMs !== undefined && endMs !== undefined) {
+                byId.set(c.id, { start: formatDate(startMs), end: formatDate(endMs) });
+            }
+        }
+        if (byId.size > 0) dateRanges = { byId };
+    }
+
+    const block = buildCompartmentBlock(compartments, facts, memoryBlock, dateRanges);
 
     // When there are no compartments yet (new session, or memories seeded before
     // historian first run), inject memories/facts without a boundary cutoff.

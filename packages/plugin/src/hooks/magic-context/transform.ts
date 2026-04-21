@@ -35,6 +35,7 @@ import {
     stripClearedReasoning,
     stripReasoningFromMergedAssistants,
 } from "./strip-content";
+import { injectTemporalMarkers } from "./temporal-awareness";
 import { runCompartmentPhase } from "./transform-compartment-phase";
 import { loadContextUsage, resolveSchedulerDecision } from "./transform-context-state";
 import { findLastUserMessageId, findSessionId } from "./transform-message-helpers";
@@ -165,6 +166,10 @@ export interface TransformDeps {
     projectPath?: string;
     experimentalCompactionMarkers?: boolean;
     experimentalUserMemories?: boolean;
+    /** When true, inject wall-clock gap markers (<!-- +Xm -->) on user messages and
+     *  add start/end date attributes to <compartment> elements in <session-history>.
+     *  Controlled by `experimental.temporal_awareness` config. */
+    experimentalTemporalAwareness?: boolean;
     /** When true, run a second editor pass after historian to clean U: lines.
      *  Enables the historian-editor agent. Controlled by `historian.two_pass` config. */
     historianTwoPass?: boolean;
@@ -359,6 +364,7 @@ export function createTransform(deps: TransformDeps) {
                 getNotificationParams: () => notificationParams,
                 experimentalCompactionMarkers: deps.experimentalCompactionMarkers,
                 experimentalUserMemories: deps.experimentalUserMemories,
+                experimentalTemporalAwareness: deps.experimentalTemporalAwareness,
                 historianTwoPass: deps.historianTwoPass,
                 compressorMinCompartmentRatio: deps.compressorMinCompartmentRatio,
                 compressorMaxMergeDepth: deps.compressorMaxMergeDepth,
@@ -443,6 +449,7 @@ export function createTransform(deps: TransformDeps) {
                 isCacheBusting,
                 projectPath,
                 deps.memoryConfig?.injectionBudgetTokens,
+                deps.experimentalTemporalAwareness,
             );
             logTransformTiming(sessionId, "prepareCompartmentInjection", tInj);
         }
@@ -457,6 +464,18 @@ export function createTransform(deps: TransformDeps) {
         let messageTagNumbers = new Map<MessageLike, number>();
         let batch: { finalize: () => void } | null = null;
         let hasRecentReduceCall = false;
+        // Inject temporal markers before tagging so the §N§ tag prefix wraps
+        // around our marker. Idempotent and stable — gap values derive from
+        // immutable message.time.created / time.completed.
+        if (deps.experimentalTemporalAwareness) {
+            const tTemporal = performance.now();
+            const injected = injectTemporalMarkers(messages);
+            if (injected > 0) {
+                sessionLog(sessionId, `temporal: injected ${injected} gap markers`);
+            }
+            logTransformTiming(sessionId, "injectTemporalMarkers", tTemporal);
+        }
+
         try {
             const t0 = performance.now();
             deps.tagger.initFromDb(sessionId, db);
@@ -608,6 +627,7 @@ export function createTransform(deps: TransformDeps) {
             skipAwaitForThisPass: skipCompartmentAwaitForThisPass,
             experimentalCompactionMarkers: deps.experimentalCompactionMarkers,
             experimentalUserMemories: deps.experimentalUserMemories,
+            experimentalTemporalAwareness: deps.experimentalTemporalAwareness,
             historianTwoPass: deps.historianTwoPass,
             compressorMinCompartmentRatio: deps.compressorMinCompartmentRatio,
             compressorMaxMergeDepth: deps.compressorMaxMergeDepth,

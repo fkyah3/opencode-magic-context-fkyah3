@@ -269,10 +269,16 @@ export function replaceAllCompartmentState(
     })();
 }
 
+export interface CompartmentDateRanges {
+    /** Map compartment id → `{ start: "YYYY-MM-DD", end: "YYYY-MM-DD" }` */
+    byId: Map<number, { start: string; end: string }>;
+}
+
 export function buildCompartmentBlock(
     compartments: Compartment[],
     facts: SessionFact[],
     memoryBlock?: string,
+    dateRanges?: CompartmentDateRanges,
 ): string {
     const lines: string[] = [];
 
@@ -282,8 +288,10 @@ export function buildCompartmentBlock(
     }
 
     for (const c of compartments) {
+        const dates = dateRanges?.byId.get(c.id);
+        const dateAttr = dates ? ` start-date="${dates.start}" end-date="${dates.end}"` : "";
         lines.push(
-            `<compartment start="${c.startMessage}" end="${c.endMessage}" title="${escapeXmlAttr(c.title)}">`,
+            `<compartment start="${c.startMessage}" end="${c.endMessage}"${dateAttr} title="${escapeXmlAttr(c.title)}">`,
         );
         lines.push(escapeXmlContent(c.content));
         lines.push("</compartment>");

@@ -91,6 +91,7 @@ export interface MagicContextDeps {
         experimental?: {
             user_memories?: { enabled: boolean; promotion_threshold: number };
             pin_key_files?: { enabled: boolean; token_budget: number; min_reads: number };
+            temporal_awareness?: boolean;
         };
     };
 }
@@ -259,6 +260,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         projectPath,
         experimentalCompactionMarkers: deps.config.compaction_markers,
         experimentalUserMemories: deps.config.experimental?.user_memories?.enabled,
+        experimentalTemporalAwareness: deps.config.experimental?.temporal_awareness === true,
         historianTwoPass: deps.config.historian?.two_pass === true,
         compressorMinCompartmentRatio:
             deps.config.compressor?.enabled === false
@@ -440,6 +442,7 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         experimentalUserMemories: deps.config.experimental?.user_memories?.enabled,
         experimentalPinKeyFiles: deps.config.experimental?.pin_key_files?.enabled ?? false,
         experimentalPinKeyFilesTokenBudget: deps.config.experimental?.pin_key_files?.token_budget,
+        experimentalTemporalAwareness: deps.config.experimental?.temporal_awareness === true,
     });
 
     const eventHook = createEventHook({

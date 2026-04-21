@@ -81,6 +81,8 @@ export function createSystemPromptHashHandler(deps: {
     experimentalPinKeyFiles?: boolean;
     /** Token budget for key files injection (default 10000) */
     experimentalPinKeyFilesTokenBudget?: number;
+    /** When true, add a temporal-awareness guidance paragraph + surface compartment dates */
+    experimentalTemporalAwareness?: boolean;
 }): (input: { sessionID?: string }, output: { system: string[] }) => Promise<void> {
     // Per-session sticky date: we freeze the date string from the system prompt
     // and only update it on cache-busting passes. This prevents a midnight date
@@ -108,6 +110,7 @@ export function createSystemPromptHashHandler(deps: {
                 deps.ctxReduceEnabled,
                 deps.dreamerEnabled,
                 deps.dropToolStructure,
+                deps.experimentalTemporalAwareness,
             );
             output.system.push(guidance);
             sessionLog(

@@ -58,6 +58,8 @@ interface RunCompartmentPhaseArgs {
     experimentalCompactionMarkers?: boolean;
     /** When true, extract user behavior observations from historian output */
     experimentalUserMemories?: boolean;
+    /** When true, inject wall-clock dates on compartments in <session-history>. */
+    experimentalTemporalAwareness?: boolean;
     /** When true, run a second editor pass after historian to clean U: lines. */
     historianTwoPass?: boolean;
     /** Compressor floor ratio: floor = ceil(lastEndMessage / minCompartmentRatio). */
@@ -127,6 +129,7 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
             args.cacheAlreadyBusting ?? false,
             args.projectPath,
             args.injectionBudgetTokens,
+            args.experimentalTemporalAwareness,
         );
         return "completed";
     }
