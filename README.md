@@ -30,11 +30,11 @@
 
 ## What is Magic Context?
 
-Your agent should never stop working to manage its own context. Magic Context is an OpenCode plugin that handles context and memory management entirely in the background:
+Your agent **should never stop working** to manage its own context. Magic Context is an OpenCode plugin that handles context and memory management entirely in the background:
 
-**1.** Transparent context compaction via a background historian — the main agent keeps working while a separate model compresses older conversation. All operations are **cache-aware** and deferred to avoid wasting cached prefixes.
+**1.** Transparent context compaction via a **background historian** — the main agent keeps working while a separate model compresses older conversation. All operations are **cache-aware** and deferred to avoid wasting cached prefixes.
 
-**2.** Cross-session project memory — architecture decisions, constraints, and preferences persist across conversations.
+**2.** **Cross-session project memory** — architecture decisions, constraints, and preferences persist across conversations.
 
 **3.** Overnight dreamer agent that consolidates, deduplicates, and promotes memories into canonical facts, plus maintains codebase documentation.
 
@@ -42,7 +42,13 @@ Your agent should never stop working to manage its own context. Magic Context is
 
 **5.** TUI sidebar with live context breakdown, token usage, historian status, and memory counts — right inside the terminal.
 
-### ✨ Graduated in v0.14
+## Best way to use Magic Context?  
+
+Keep using the **same session** for **weeks**, **months**, or even **years**. **One session** per **project**!
+
+---
+
+### ✨ New Features Graduated in v0.14
 
 **User Memories** — now enabled by default under `dreamer.user_memories`. Historian extracts behavioral observations about you alongside its normal compartment output (communication style, expertise level, review focus, working patterns). Recurring observations are promoted by the dreamer to stable user memories that appear in all sessions via `<user-profile>`. Set `dreamer.user_memories.enabled: false` to opt out. Requires dreamer.
 
