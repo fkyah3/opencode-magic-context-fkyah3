@@ -72,6 +72,8 @@ interface RunCompartmentPhaseArgs {
     compressorMaxMergeDepth?: number;
     /** Compressor cooldown in milliseconds between background runs. */
     compressorCooldownMs?: number;
+    /** Forwarded to compartment runner — see CompartmentRunnerDeps.onInjectionCacheCleared. */
+    onInjectionCacheCleared?: (sessionId: string) => void;
 }
 
 export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promise<{
@@ -171,6 +173,7 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
                 historianTwoPass: args.historianTwoPass,
                 compressorMinCompartmentRatio: args.compressorMinCompartmentRatio,
                 compressorMaxMergeDepth: args.compressorMaxMergeDepth,
+                onInjectionCacheCleared: args.onInjectionCacheCleared,
             });
             compartmentInProgress = true;
         }
@@ -209,6 +212,7 @@ export async function runCompartmentPhase(args: RunCompartmentPhaseArgs): Promis
                 historianTwoPass: args.historianTwoPass,
                 compressorMinCompartmentRatio: args.compressorMinCompartmentRatio,
                 compressorMaxMergeDepth: args.compressorMaxMergeDepth,
+                onInjectionCacheCleared: args.onInjectionCacheCleared,
             });
             activeRun = getActiveCompartmentRun(args.sessionId);
         } else if (!activeRun && hasEligibleHistoryForCompartment()) {

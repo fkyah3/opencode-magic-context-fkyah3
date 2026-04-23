@@ -422,6 +422,13 @@ export function createMagicContextHook(deps: MagicContextDeps) {
                             agentBySession,
                         ),
                     historianTwoPass: deps.config.historian?.two_pass === true,
+                    // Recomp invalidates injection cache after promotion. Mark
+                    // the next transform as cache-busting so the new history
+                    // block renders on a pass that's already flushing — see
+                    // council Finding #9.
+                    onInjectionCacheCleared: (sid) => {
+                        flushedSessions.add(sid);
+                    },
                 },
                 options,
             ),

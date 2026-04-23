@@ -201,6 +201,11 @@ export async function runCompartmentAgent(deps: CompartmentRunnerDeps): Promise<
         // Invalidate in-memory injection cache so the next transform rebuilds <session-history>
         // with the new compartments/facts. Without this, cached stale content persists.
         clearInjectionCache(sessionId);
+        // Signal the caller that the next transform MUST treat itself as cache-
+        // busting. Otherwise a defer pass would rebuild <session-history> with
+        // new compartments and silently change message[0] → provider cache bust
+        // without a legitimate scheduler signal. See council Finding #9.
+        deps.onInjectionCacheCleared?.(sessionId);
         if (deps.directory) {
             promoteSessionFactsToMemory(
                 db,

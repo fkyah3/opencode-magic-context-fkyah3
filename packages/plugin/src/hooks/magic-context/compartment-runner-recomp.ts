@@ -113,6 +113,9 @@ export async function executeContextRecompInternal(deps: CompartmentRunnerDeps):
 
             // Invalidate injection cache after recomp promotion
             clearInjectionCache(sessionId);
+            // Signal the caller that the next transform MUST treat itself as
+            // cache-busting. See council Finding #9.
+            deps.onInjectionCacheCleared?.(sessionId);
 
             if (deps.directory) {
                 promoteSessionFactsToMemory(
@@ -297,6 +300,9 @@ export async function executeContextRecompInternal(deps: CompartmentRunnerDeps):
         clearCompressionDepth(db, sessionId);
         // Invalidate injection cache after final recomp promotion
         clearInjectionCache(sessionId);
+        // Signal the caller that the next transform MUST treat itself as
+        // cache-busting. See council Finding #9.
+        deps.onInjectionCacheCleared?.(sessionId);
 
         const finalCompartments = promoted?.compartments ?? candidateCompartments;
         const finalFacts = promoted?.facts ?? candidateFacts;

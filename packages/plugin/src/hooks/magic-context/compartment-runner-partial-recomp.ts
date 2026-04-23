@@ -324,6 +324,9 @@ export async function executePartialRecompInternal(
             // Invalidate rendered injection cache so the next transform pass
             // rebuilds <session-history>.
             clearInjectionCache(sessionId);
+            // Signal the caller that the next transform MUST treat itself as
+            // cache-busting. See council Finding #9.
+            deps.onInjectionCacheCleared?.(sessionId);
 
             const lastEnd = merged[merged.length - 1]?.endMessage ?? snapEnd;
             return { compartmentCount: merged.length, lastEndMessage: lastEnd };

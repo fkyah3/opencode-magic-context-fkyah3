@@ -432,6 +432,13 @@ export function createTransform(deps: TransformDeps) {
                 historianTwoPass: deps.historianTwoPass,
                 compressorMinCompartmentRatio: deps.compressorMinCompartmentRatio,
                 compressorMaxMergeDepth: deps.compressorMaxMergeDepth,
+                // Historian publication invalidates the injection cache AND
+                // changes compartments/facts that render into message[0]. Mark
+                // the next transform as cache-busting so the rebuild happens on
+                // a pass that's already flushing — not on a defer pass.
+                onInjectionCacheCleared: (sid) => {
+                    deps.flushedSessions.add(sid);
+                },
             });
             skipCompartmentAwaitForThisPass = true;
             return true;
@@ -734,6 +741,10 @@ export function createTransform(deps: TransformDeps) {
             compressorMinCompartmentRatio: deps.compressorMinCompartmentRatio,
             compressorMaxMergeDepth: deps.compressorMaxMergeDepth,
             compressorCooldownMs: deps.compressorCooldownMs,
+            // See startRecoveryRun above — same rationale.
+            onInjectionCacheCleared: (sid) => {
+                deps.flushedSessions.add(sid);
+            },
         });
         pendingCompartmentInjection = compartmentPhase.pendingCompartmentInjection;
         const awaitedCompartmentRun = compartmentPhase.awaitedCompartmentRun;

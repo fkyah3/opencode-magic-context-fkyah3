@@ -30,6 +30,15 @@ export interface CompartmentRunnerDeps {
     compressorMinCompartmentRatio?: number;
     /** Compressor max merge depth (1-5). Compartments at or above this depth are skipped. */
     compressorMaxMergeDepth?: number;
+    /**
+     * Called after the runner invalidates the in-memory injection cache
+     * (post-historian publication, post-recomp promotion, post-partial-recomp
+     * promotion). The caller should register the session as flush-pending so
+     * the very next transform pass is treated as cache-busting. Without this
+     * signal, background historian work can rebuild <session-history> on a
+     * defer pass and silently bust provider cache. See council Finding #9.
+     */
+    onInjectionCacheCleared?: (sessionId: string) => void;
 }
 
 export interface CandidateCompartment {
