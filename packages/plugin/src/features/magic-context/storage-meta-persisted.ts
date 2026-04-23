@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { sessionLog } from "../../shared/logger";
 import { ensureSessionMetaRow } from "./storage-meta-shared";
 import type { ContextUsage } from "./types";
 
@@ -409,9 +410,13 @@ export function incrementHistorianFailure(db: Database, sessionId: string, error
     db.transaction(() => {
         ensureSessionMetaRow(db, sessionId);
         const current = getHistorianFailureState(db, sessionId);
+        const nextCount = current.failureCount + 1;
         db.prepare(
             "UPDATE session_meta SET historian_failure_count = ?, historian_last_error = ?, historian_last_failure_at = ? WHERE session_id = ?",
-        ).run(current.failureCount + 1, error, Date.now(), sessionId);
+        ).run(nextCount, error, Date.now(), sessionId);
+        // Normalize error to single line for log greppability
+        const reason = error.replace(/\s+/g, " ").trim().slice(0, 300);
+        sessionLog(sessionId, `historian failure recorded: count=${nextCount} reason="${reason}"`);
     })();
 }
 

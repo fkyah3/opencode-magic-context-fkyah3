@@ -6,7 +6,7 @@ import { DEFAULT_HISTORIAN_TIMEOUT_MS } from "../../config/schema/magic-context"
 import type { PluginContext } from "../../plugin/types";
 import * as shared from "../../shared";
 import { extractLatestAssistantText } from "../../shared/assistant-message-extractor";
-import { getErrorMessage } from "../../shared/error-message";
+import { describeError, getErrorMessage } from "../../shared/error-message";
 import { buildHistorianEditorPrompt } from "./compartment-prompt";
 import type {
     HistorianProgressCallbacks,
@@ -314,14 +314,15 @@ async function runHistorianPrompt(args: {
         );
         return { ok: true, result, dumpPath };
     } catch (modelError: unknown) {
-        const modelMsg = getErrorMessage(modelError);
-        const modelStack = modelError instanceof Error ? modelError.stack : undefined;
-        shared.sessionLog(parentSessionId, "compartment agent: historian attempt failed", {
-            error: modelMsg,
-            promptLength: prompt.length,
-            stack: modelStack,
-        });
-        return { ok: false, error: `Historian failed while processing this session: ${modelMsg}` };
+        const desc = describeError(modelError);
+        shared.sessionLog(
+            parentSessionId,
+            `historian prompt failed: ${desc.brief} promptLength=${prompt.length}${desc.stackHead ? ` stackHead="${desc.stackHead}"` : ""}`,
+        );
+        return {
+            ok: false,
+            error: `Historian failed while processing this session: ${desc.brief}`,
+        };
     } finally {
         if (agentSessionId) {
             await client.session

@@ -2,7 +2,7 @@ import {
     getOrCreateSessionMeta,
     getPendingOps,
     getTagsBySession,
-    getTopNBySize,
+    type getTopNBySize,
     updateSessionMeta,
 } from "../../features/magic-context/storage";
 import type { ContextUsage, SessionMeta, TagEntry } from "../../features/magic-context/types";
