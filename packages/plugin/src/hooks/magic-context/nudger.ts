@@ -277,37 +277,3 @@ function estimateProjectedPercentage(
     const dropRatio = pendingDropBytes / totalActiveBytes;
     return contextUsage.percentage * (1 - dropRatio);
 }
-
-export function generateEmergencyNudgeText(
-    db: ContextDatabase,
-    sessionId: string,
-    contextUsage: ContextUsage,
-    config: { protected_tags: number },
-): string {
-    const largest = formatLargestTags(getTopNBySize(db, sessionId, 3));
-    const protectedCount = config.protected_tags;
-    const activeTags = getTagsBySession(db, sessionId).filter((t) => t.status === "active");
-    const highestProtected = activeTags
-        .map((t) => t.tagNumber)
-        .sort((a, b) => b - a)
-        .slice(0, protectedCount)[0];
-    const protectedHint = highestProtected
-        ? ` Tags \u00a7${highestProtected}\u00a7 and above are protected (last ${protectedCount}) \u2014 You MUST NOT try to reduce those.`
-        : "";
-    const oldToolHint = formatOldToolTags(activeTags, protectedCount, 5);
-
-    return [
-        `<instruction name="context_emergency">`,
-        `CONTEXT EMERGENCY — ~${Math.round(contextUsage.percentage)}%. STOP all current work immediately.`,
-        ``,
-        `You MUST use \`ctx_reduce\` RIGHT NOW to free space. If context overflows, you lose all work.`,
-        ``,
-        `Steps:`,
-        `1. Find OLD tool outputs (grep results, file reads, build logs) you already processed — look at §N§ tags`,
-        `2. Drop those specifically: e.g. drop="3,7,12" — NEVER drop large ranges like "1-50"`,
-        `3. KEEP anything related to current task, recent errors, or decisions`,
-        ``,
-        `Largest tags: ${largest}.${oldToolHint}${protectedHint}`,
-        `</instruction>`,
-    ].join("\n");
-}

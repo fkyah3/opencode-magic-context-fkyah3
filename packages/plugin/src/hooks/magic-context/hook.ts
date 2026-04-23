@@ -475,8 +475,6 @@ export function createMagicContextHook(deps: MagicContextDeps) {
             : undefined,
     });
 
-    const emergencyNudgeFired = new Set<string>();
-
     const systemPromptHash = createSystemPromptHashHandler({
         db,
         protectedTags: deps.config.protected_tags,
@@ -503,7 +501,6 @@ export function createMagicContextHook(deps: MagicContextDeps) {
         agentBySession,
         recentReduceBySession,
         toolUsageSinceUserTurn,
-        emergencyNudgeFired,
         flushedSessions,
         lastHeuristicsTurnId,
         commitSeenLastPass,

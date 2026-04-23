@@ -11,11 +11,9 @@ import { clearHistorianFailureState } from "../../features/magic-context/storage
 import type { PluginContext } from "../../plugin/types";
 import { sessionLog } from "../../shared/logger";
 import { clearAutoSearchForSession } from "./auto-search-runner";
-import { FORCE_COMPARTMENT_PERCENTAGE } from "./compartment-trigger";
 import { getMessageUpdatedAssistantInfo, getSessionProperties } from "./event-payloads";
 import { resolveSessionId as resolveEventSessionId } from "./event-resolvers";
 import { clearNoteNudgeState, onNoteTrigger } from "./note-nudger";
-import { generateEmergencyNudgeText } from "./nudger";
 
 const TOOL_HEAVY_TURN_REMINDER_THRESHOLD = 5;
 const TOOL_HEAVY_TURN_REMINDER_TEXT =
@@ -28,7 +26,6 @@ export type RecentReduceBySession = Map<string, number>;
 export type ToolUsageSinceUserTurn = Map<string, number>;
 export type FlushedSessions = Set<string>;
 export type LastHeuristicsTurnId = Map<string, string>;
-export type EmergencyNudgeFired = Set<string>;
 
 export function getLiveNotificationParams(
     sessionId: string,
@@ -128,7 +125,6 @@ export function createEventHook(args: {
     agentBySession: AgentBySession;
     recentReduceBySession: RecentReduceBySession;
     toolUsageSinceUserTurn: ToolUsageSinceUserTurn;
-    emergencyNudgeFired: EmergencyNudgeFired;
     flushedSessions: FlushedSessions;
     lastHeuristicsTurnId: LastHeuristicsTurnId;
     commitSeenLastPass?: Map<string, boolean>;
@@ -191,7 +187,6 @@ export function createEventHook(args: {
             args.agentBySession.delete(sessionId);
             args.recentReduceBySession.delete(sessionId);
             args.toolUsageSinceUserTurn.delete(sessionId);
-            args.emergencyNudgeFired.delete(sessionId);
             args.flushedSessions.delete(sessionId);
             args.lastHeuristicsTurnId.delete(sessionId);
             args.commitSeenLastPass?.delete(sessionId);
@@ -199,61 +194,17 @@ export function createEventHook(args: {
             clearAutoSearchForSession(sessionId);
         }
 
-        if (input.event.type === "message.removed") {
-            return;
-        }
-
-        const entry = args.contextUsageMap.get(sessionId);
-        if (!entry) return;
-
-        if (entry.usage.percentage < FORCE_COMPARTMENT_PERCENTAGE) {
-            args.emergencyNudgeFired.delete(sessionId);
-            return;
-        }
-
-        // Skip 80% emergency nudge when ctx_reduce is disabled — it tells the
-        // agent to "STOP AND COMPRESS" which requires ctx_reduce.
-        if (args.ctxReduceEnabled === false) return;
-
-        if (args.emergencyNudgeFired.has(sessionId)) return;
-
-        const meta = getOrCreateSessionMeta(args.db, sessionId);
-        if (meta.isSubagent) return;
-
-        args.emergencyNudgeFired.add(sessionId);
-        updateSessionMeta(args.db, sessionId, { lastNudgeTokens: entry.usage.inputTokens });
-
-        const nudgeText = generateEmergencyNudgeText(args.db, sessionId, entry.usage, {
-            protected_tags: args.protectedTags,
-        });
-        sessionLog(sessionId, "firing 80% emergency nudge as ignored notification");
-
-        try {
-            const model = args.liveModelBySession.get(sessionId);
-            const variant = args.variantBySession.get(sessionId);
-            const agent = args.agentBySession.get(sessionId);
-            // Intentional: feature-detection cast for optional/experimental OpenCode promptAsync API
-            const c = args.client as {
-                session: { promptAsync?: (opts: unknown) => Promise<unknown> };
-            };
-            if (typeof c.session?.promptAsync !== "function") {
-                sessionLog(sessionId, "emergency nudge: promptAsync unavailable");
-                args.emergencyNudgeFired.delete(sessionId);
-                return;
-            }
-            await c.session.promptAsync({
-                path: { id: sessionId },
-                body: {
-                    ...(agent ? { agent } : {}),
-                    ...(model ? { model } : {}),
-                    ...(variant ? { variant } : {}),
-                    parts: [{ type: "text", text: nudgeText }],
-                },
-            });
-        } catch (error) {
-            sessionLog(sessionId, "emergency nudge promptAsync failed:", error);
-            args.emergencyNudgeFired.delete(sessionId);
-        }
+        // Historical note: v0.14.1 removed the 80% "context emergency" nudge
+        // that fired from message.updated. By the time usage reached 80% the
+        // agent had already received 4-8 earlier reduction nudges from the
+        // rolling band system and ignored all of them — the emergency nudge
+        // was louder but mechanistically identical. Automatic safety valves
+        // (85% force-drop-tools in transform-postprocess-phase.ts, 95%
+        // block-and-wait-for-historian in transform.ts) keep context from
+        // overflowing without depending on agent cooperation, so the nudge
+        // was doing more harm than good: firing repeatedly during slow-
+        // historian runs (common with Copilot Claude) and mutating the
+        // active user message via promptAsync every time.
     };
 }
 

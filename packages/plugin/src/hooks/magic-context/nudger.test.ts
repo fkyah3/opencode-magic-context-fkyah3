@@ -13,7 +13,7 @@ import {
     queuePendingOp,
     updateSessionMeta,
 } from "../../features/magic-context/storage";
-import { createNudger, generateEmergencyNudgeText, RECENT_CTX_REDUCE_WINDOW_MS } from "./nudger";
+import { createNudger, RECENT_CTX_REDUCE_WINDOW_MS } from "./nudger";
 
 const tempDirs: string[] = [];
 const originalXdgDataHome = process.env.XDG_DATA_HOME;
@@ -172,29 +172,6 @@ describe("createNudger", () => {
             type: "assistant",
             text: expect.stringContaining("CONTEXT CRITICAL"),
         });
-    });
-
-    it("generates emergency nudge text for promptAsync", () => {
-        //#given
-        useTempDataHome("context-nudger-emergency-text-");
-        const sessionId = "ses-emergency-text";
-        const db = openDatabase();
-        insertTag(db, sessionId, "m-1", "message", 700, 1);
-
-        //#when
-        const text = generateEmergencyNudgeText(
-            db,
-            sessionId,
-            { percentage: 82, inputTokens: 164_000 },
-            { protected_tags: 8 },
-        );
-
-        //#then
-        expect(text).toContain("CONTEXT EMERGENCY");
-        expect(text).toContain("~82%");
-        expect(text).toContain('<instruction name="context_emergency">');
-        expect(text).toContain("NEVER drop large ranges");
-        expect(text).toContain("Largest tags:");
     });
 
     it("fires immediately when the rolling urgency band escalates", () => {
