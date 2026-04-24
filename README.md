@@ -1,3 +1,8 @@
+> [!NOTE]
+> **fkyah3/opencode-magic-context-fkyah3** — 本 fork 包含侧边栏中文本地化和 TUI 渲染修复。
+> 详见 [`fkyah3_dev/README.md`](fkyah3_dev/README.md)（中英双语）。
+>
+
 <h1 align="center">Magic Context</h1>
 
 <p align="center">
