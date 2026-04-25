@@ -1,7 +1,18 @@
-> [!NOTE]
-> **fkyah3/opencode-magic-context-fkyah3** — 本 fork 包含侧边栏中文本地化和 TUI 渲染修复。
-> 详见 [`fkyah3_dev/README.md`](fkyah3_dev/README.md)（中英双语）。
->
+<p align="center"><b>fkyah3/opencode-magic-context-fkyah3</b><br>
+<code>Cache-aware context management · AI-crafted fork</code></p>
+
+<p align="center">
+  <a href="./README.zh.md">简体中文</a>
+</p>
+
+---
+
+This is a personal fork of [cortexkit/opencode-magic-context](https://github.com/cortexkit/opencode-magic-context). The downstream content below is preserved for reference. Any modifications in this fork were implemented by AI — **DeepSeek V4 Flash (thinking mode) / Sisyphus** — under human oversight.
+
+> **Code by: DeepSeek V4 Flash (thinking mode) / Sisyphus**  
+> **Human reviewer & direction: fkyah3**
+
+---
 
 <h1 align="center">Magic Context</h1>
 
@@ -35,11 +46,11 @@
 
 ## What is Magic Context?
 
-Your agent **should never stop working** to manage its own context. Magic Context is an OpenCode plugin that handles context and memory management entirely in the background:
+Your agent should never stop working to manage its own context. Magic Context is an OpenCode plugin that handles context and memory management entirely in the background:
 
-**1.** Transparent context compaction via a **background historian** — the main agent keeps working while a separate model compresses older conversation. All operations are **cache-aware** and deferred to avoid wasting cached prefixes.
+**1.** Transparent context compaction via a background historian — the main agent keeps working while a separate model compresses older conversation. All operations are **cache-aware** and deferred to avoid wasting cached prefixes.
 
-**2.** **Cross-session project memory** — architecture decisions, constraints, and preferences persist across conversations.
+**2.** Cross-session project memory — architecture decisions, constraints, and preferences persist across conversations.
 
 **3.** Overnight dreamer agent that consolidates, deduplicates, and promotes memories into canonical facts, plus maintains codebase documentation.
 
@@ -47,13 +58,7 @@ Your agent **should never stop working** to manage its own context. Magic Contex
 
 **5.** TUI sidebar with live context breakdown, token usage, historian status, and memory counts — right inside the terminal.
 
-## Best way to use Magic Context?  
-
-Keep using the **same session** for **weeks**, **months**, or even **years**. **One session** per **project**!
-
----
-
-### ✨ New Features Graduated in v0.14
+### ✨ Graduated in v0.14
 
 **User Memories** — now enabled by default under `dreamer.user_memories`. Historian extracts behavioral observations about you alongside its normal compartment output (communication style, expertise level, review focus, working patterns). Recurring observations are promoted by the dreamer to stable user memories that appear in all sessions via `<user-profile>`. Set `dreamer.user_memories.enabled: false` to opt out. Requires dreamer.
 
