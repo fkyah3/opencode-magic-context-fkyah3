@@ -57,13 +57,70 @@ function setToolContent(part: unknown, content: string): void {
     }
 }
 
+function buildToolSummary(output: string): string {
+    try {
+        const lines = output.split("\n");
+        const lineCount = lines.length;
+        const byteSize = new TextEncoder().encode(output).length;
+        const kb = byteSize > 1024 ? Math.round(byteSize / 1024) : 0;
+
+        // First non-empty line preview (trimmed to 120 chars)
+        let preview = "";
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.length > 0) {
+                preview = trimmed.length > 120
+                    ? trimmed.substring(0, 117) + "..."
+                    : trimmed;
+                break;
+            }
+        }
+
+        let summary = `[tool: `;
+        if (kb > 0) {
+            summary += `${lineCount} lines, ${kb}KB`;
+        } else {
+            summary += `${lineCount} lines, ${byteSize}B`;
+        }
+        if (preview) {
+            summary += ` | ${preview}`;
+        }
+        summary += `]`;
+        return summary;
+    } catch {
+        return "[truncated]";
+    }
+}
+
+function getInputHint(input: Record<string, unknown>): string {
+    try {
+        const pathKeys = ["path", "filePath", "file", "location", "source"];
+        for (const key of pathKeys) {
+            const val = input[key];
+            if (typeof val === "string" && val.length > 0) {
+                return val.substring(0, 80);
+            }
+        }
+        for (const val of Object.values(input)) {
+            if (typeof val === "string" && val.length > 0) {
+                return val.substring(0, 80);
+            }
+        }
+        return "";
+    } catch {
+        return "";
+    }
+}
+
 function truncateToolPart(part: unknown): void {
     if (!isRecord(part)) return;
 
     // OpenCode format: { type: "tool", state: { input: {...}, output: "..." } }
     if (part.type === "tool" && isRecord(part.state)) {
         const state = part.state;
-        state.output = "[truncated]";
+        const output = typeof state.output === "string" ? state.output : "";
+        const hint = isRecord(state.input) ? getInputHint(state.input) : "";
+        state.output = buildToolSummary(output);
 
         if (isRecord(state.input)) {
             const inputSize = estimateInputSize(state.input);
@@ -77,7 +134,8 @@ function truncateToolPart(part: unknown): void {
 
     // Anthropic format: { type: "tool_result", content: "..." }
     if (part.type === "tool_result") {
-        part.content = "[truncated]";
+        const content = typeof part.content === "string" ? part.content : "";
+        part.content = buildToolSummary(content);
         return;
     }
 
