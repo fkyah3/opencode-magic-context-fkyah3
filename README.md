@@ -1,3 +1,19 @@
+<p align="center"><b>fkyah3/opencode-magic-context-fkyah3</b><br>
+<code>Cache-aware context management · AI-crafted fork</code></p>
+
+<p align="center">
+  <a href="./README.zh.md">简体中文</a>
+</p>
+
+---
+
+This is a personal fork of [cortexkit/opencode-magic-context](https://github.com/cortexkit/opencode-magic-context). The downstream content below is preserved for reference. Any modifications in this fork were implemented by AI — **DeepSeek V4 Flash (thinking mode) / Sisyphus** — under human oversight.
+
+> **Code by: DeepSeek V4 Flash (thinking mode) / Sisyphus**  
+> **Human reviewer & direction: fkyah3**
+
+---
+
 <h1 align="center">Magic Context</h1>
 
 <p align="center">
