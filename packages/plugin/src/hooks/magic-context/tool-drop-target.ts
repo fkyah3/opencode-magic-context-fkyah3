@@ -94,6 +94,7 @@ function buildToolSummary(output: string): string {
 
 function getInputHint(input: Record<string, unknown>): string {
     try {
+        // Extract the most descriptive argument from the input
         const pathKeys = ["path", "filePath", "file", "location", "source"];
         for (const key of pathKeys) {
             const val = input[key];
@@ -101,6 +102,7 @@ function getInputHint(input: Record<string, unknown>): string {
                 return val.substring(0, 80);
             }
         }
+        // Fallback: first string value found
         for (const val of Object.values(input)) {
             if (typeof val === "string" && val.length > 0) {
                 return val.substring(0, 80);
