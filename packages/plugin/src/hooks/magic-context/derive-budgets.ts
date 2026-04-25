@@ -31,7 +31,10 @@ const TRIGGER_BUDGET_MAX = 50_000;
 
 const HISTORIAN_CHUNK_PERCENTAGE = 0.25;
 const HISTORIAN_CHUNK_MIN = 8_000;
-const HISTORIAN_CHUNK_MAX = 50_000;
+// Raised from 50K to 80K to match 800K context window (1.6× increase).
+// V4 Flash with 800K context and 25% budget: 200K theoretical, but 80K
+// keeps chunk sizes manageable for historian quality.
+const HISTORIAN_CHUNK_MAX = 80_000;
 
 const DEFAULT_HISTORIAN_CONTEXT_FALLBACK = 128_000;
 

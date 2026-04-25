@@ -18,7 +18,9 @@ export const DEFAULT_COMPRESSOR_MAX_COMPARTMENTS_PER_PASS = 15;
 /** Number of newest compartments always excluded from compression.
  *  Protects freshly-published historian compartments from immediate re-compression,
  *  which would lose narrative quality before the agent has even used the compartment. */
-export const DEFAULT_COMPRESSOR_GRACE_COMPARTMENTS = 10;
+// Aligned with V4 CSA sliding window (128 tokens ≈ ~15 compartments at ~8 msg/compartment).
+// With 800K context, we can afford a larger grace period before caveman compression kicks in.
+export const DEFAULT_COMPRESSOR_GRACE_COMPARTMENTS = 15;
 /** Output count at each depth = ceil(input / ratio).
  *  Lower ratios = gentler compression. Depth 5 is title-only (no LLM call). */
 export const COMPRESSOR_MERGE_RATIO_BY_DEPTH: Record<number, number> = {
