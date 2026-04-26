@@ -46,6 +46,8 @@ const EMPTY_SNAPSHOT: SidebarSnapshot = {
     readySmartNoteCount: 0,
     cacheTtl: "5m",
     lastDreamerRunAt: null,
+    dreamerRunning: false,
+    dreamerNextRunAt: null,
     projectIdentity: null,
     compartmentTokens: 0,
     factTokens: 0,

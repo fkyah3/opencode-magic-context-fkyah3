@@ -80,6 +80,8 @@ function buildSidebarSnapshot(db: Database, sessionId: string, directory: string
         readySmartNoteCount: 0,
         cacheTtl: "5m",
         lastDreamerRunAt: null,
+        dreamerRunning: false,
+        dreamerNextRunAt: null,
         projectIdentity: null,
         compartmentTokens: 0,
         factTokens: 0,
@@ -179,7 +181,50 @@ function buildSidebarSnapshot(db: Database, sessionId: string, directory: string
             }
         }
 
-        // Token estimates via real Claude tokenizer (ai-tokenizer).
+        // === Dreamer status ===
+        let dreamerRunning = false;
+        let dreamerNextRunAt: number | null = null;
+        let lastDreamerRunAt: number | null = null;
+        try {
+            const lastDreamVal = db
+                .query<{ value: string }, []>("SELECT value FROM dream_state WHERE key = 'last_dream_at'")
+                .get();
+            if (lastDreamVal) {
+                lastDreamerRunAt = Number(lastDreamVal.value) || null;
+            }
+            // Check if any queue entry is currently being processed (started_at NOT NULL)
+            const runningEntry = db
+                .query<{ id: number }, []>("SELECT id FROM dream_queue WHERE started_at IS NOT NULL LIMIT 1")
+                .get();
+            const pendingEntry = db
+                .query<{ id: number }, []>("SELECT id FROM dream_queue WHERE started_at IS NULL LIMIT 1")
+                .get();
+            dreamerRunning = Boolean(runningEntry || pendingEntry);
+
+            // Calculate next run: schedule "19:00-02:00" means next window start
+            const now = new Date();
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+            const scheduleStartMinutes = 19 * 60; // 19:00
+            // If current time is before 19:00, next run is today 19:00
+            if (currentMinutes < scheduleStartMinutes) {
+                const next = new Date(now);
+                next.setHours(19, 0, 0, 0);
+                dreamerNextRunAt = next.getTime();
+            } else if (currentMinutes >= scheduleStartMinutes || currentMinutes < 2 * 60) {
+                // In the 19:00-02:00 window — next check cycle is "now" if not running
+                dreamerNextRunAt = dreamerRunning ? null : now.getTime() + 15 * 60 * 1000; // +15min
+            } else {
+                // After 02:00, outside window — next run is today 19:00
+                const next = new Date(now);
+                next.setHours(19, 0, 0, 0);
+                dreamerNextRunAt = next.getTime();
+            }
+        } catch (e) {
+            dreamerRunning = false;
+            dreamerNextRunAt = null;
+        }
+
+        // === Token estimates via real Claude tokenizer (ai-tokenizer).
         let compartmentTokens = 0;
         let factTokens = 0;
         let memoryTokens = 0;
@@ -216,22 +261,6 @@ function buildSidebarSnapshot(db: Database, sessionId: string, directory: string
             const cached = meta.memory_block_cache;
             if (typeof cached === "string" && cached.length > 0) {
                 memoryTokens = estimateTokens(cached);
-            }
-        }
-
-        let lastDreamerRunAt: number | null = null;
-        if (projectIdentity) {
-            try {
-                const dreamRow = db
-                    .query<{ value: string }, [string]>(
-                        "SELECT value FROM dream_state WHERE key = ?",
-                    )
-                    .get(`last_dream_at:${projectIdentity}`);
-                if (dreamRow?.value) {
-                    lastDreamerRunAt = Number(dreamRow.value) || null;
-                }
-            } catch {
-                // dream_state may not exist
             }
         }
 
@@ -272,6 +301,8 @@ function buildSidebarSnapshot(db: Database, sessionId: string, directory: string
             readySmartNoteCount,
             cacheTtl,
             lastDreamerRunAt,
+            dreamerRunning,
+            dreamerNextRunAt,
             projectIdentity,
             compartmentTokens,
             factTokens,

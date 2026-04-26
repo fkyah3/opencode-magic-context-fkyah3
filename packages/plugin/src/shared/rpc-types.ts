@@ -21,6 +21,8 @@ export interface SidebarSnapshot {
     readySmartNoteCount: number;
     cacheTtl: string;
     lastDreamerRunAt: number | null;
+    dreamerRunning: boolean;
+    dreamerNextRunAt: number | null;
     projectIdentity: string | null;
     compartmentTokens: number;
     factTokens: number;

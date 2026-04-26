@@ -12,6 +12,7 @@
  */
 
 import { execSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 
 // execSync is intentional here (audit #19): this runs once per unique directory per process
@@ -60,6 +61,15 @@ export function resolveProjectIdentity(directory: string): string {
     const cached = resolvedCache.get(resolved);
     if (cached !== undefined) {
         return cached;
+    }
+
+    // Global session mode: return a stable identity based on home directory. This ensures
+    // the Dreamer finds memories regardless of which directory OpenCode was launched from.
+    if (typeof process !== "undefined" && process.env?.OPENCODE_FKYAH3_GLOBAL_SESSIONS) {
+        const stableHash = Bun.hash(path.resolve(os.homedir())).toString(16).slice(0, 12);
+        const stableId = `dir:global-${stableHash}`;
+        resolvedCache.set(resolved, stableId);
+        return stableId;
     }
 
     const rootHash = getRootCommitHash(resolved);

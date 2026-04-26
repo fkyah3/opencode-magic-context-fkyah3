@@ -473,18 +473,43 @@ const SidebarContent = (props: {
                 </>
             )}
 
-            {/* Dreamer */}
+            {/* 梦幻者 */}
+            <SectionHeader theme={props.theme} title="梦幻者" />
+            <StatRow
+                theme={props.theme}
+                label="状态"
+                value={s()?.dreamerRunning ? "运行中" : "空闲中"}
+                accent={s()?.dreamerRunning ?? false}
+                dim={!s()?.dreamerRunning}
+            />
             {s()?.lastDreamerRunAt && (
-                <>
-                    <SectionHeader theme={props.theme} title="Dreamer" />
-                    <StatRow
-                        theme={props.theme}
-                        label="Last run"
-                        value={relativeTime(s()!.lastDreamerRunAt!)}
-                        dim
-                    />
-                </>
+                <StatRow
+                    theme={props.theme}
+                    label="上次"
+                    value={relativeTime(s()!.lastDreamerRunAt!)}
+                    dim
+                />
             )}
+            {s()?.dreamerNextRunAt && !s()?.dreamerRunning && (
+                <StatRow
+                    theme={props.theme}
+                    label="下次"
+                    value={relativeTime(s()!.dreamerNextRunAt!)}
+                    dim
+                />
+            )}
+            <StatRow
+                theme={props.theme}
+                label="记忆"
+                value={String(s()?.memoryCount ?? 0)}
+                dim
+            />
+            <StatRow
+                theme={props.theme}
+                label="事实"
+                value={String(s()?.factCount ?? 0)}
+                dim
+            />
         </box>
     )
 }
