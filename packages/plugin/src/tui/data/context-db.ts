@@ -40,6 +40,8 @@ const EMPTY_SNAPSHOT: SidebarSnapshot = {
     pendingOpsCount: 0,
     historianRunning: false,
     compartmentInProgress: false,
+    compressionTotalMessages: 0,
+    compressionDoneMessages: 0,
     sessionNoteCount: 0,
     readySmartNoteCount: 0,
     cacheTtl: "5m",

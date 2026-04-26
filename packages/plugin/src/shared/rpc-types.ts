@@ -15,6 +15,8 @@ export interface SidebarSnapshot {
     pendingOpsCount: number;
     historianRunning: boolean;
     compartmentInProgress: boolean;
+    compressionTotalMessages: number;
+    compressionDoneMessages: number;
     sessionNoteCount: number;
     readySmartNoteCount: number;
     cacheTtl: string;

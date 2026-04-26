@@ -344,12 +344,26 @@ const SidebarContent = (props: {
                 <text fg={props.theme.text}>
                     <b>Historian</b>
                 </text>
-                {s()?.historianRunning ? (
-                    <text fg={props.theme.warning}>compacting ⟳</text>
+                {s()?.compartmentInProgress ? (
+                    <text fg={props.theme.warning}>working ⟳</text>
                 ) : (
                     <text fg={props.theme.textMuted}>idle</text>
                 )}
             </box>
+            {(() => {
+                const snap = s()
+                if (!snap || !snap.compartmentInProgress) return null
+                const total = snap.compressionTotalMessages
+                const done = snap.compressionDoneMessages
+                const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0
+                return (
+                    <box width="100%" marginTop={0}>
+                        <text fg={props.theme.accent} wrap="end">
+                            compacting {((done / 1000).toFixed(0))}k/{((total / 1000).toFixed(0))}k msgs ({pct}%)
+                        </text>
+                    </box>
+                )
+            })()}
             <StatRow
                 theme={props.theme}
                 label="Compartments"

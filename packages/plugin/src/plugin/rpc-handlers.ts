@@ -110,6 +110,8 @@ function buildSidebarSnapshot(db: Database, sessionId: string, directory: string
         // These are tool call I/O inside conversation (not tool schemas).
         const toolCallTokensRaw = meta ? Number(meta.tool_call_tokens ?? 0) : 0;
         const compartmentInProgress = meta ? Boolean(meta.compartment_in_progress) : false;
+        const compressionTotal = meta ? Number(meta.compression_total_messages ?? 0) : 0;
+        const compressionDone = meta ? Number(meta.compression_processed_messages ?? 0) : 0;
         const cacheTtl = meta ? String(meta.cache_ttl ?? "5m") : "5m";
         const memoryBlockCount = meta ? Number(meta.memory_block_count ?? 0) : 0;
 
@@ -260,8 +262,10 @@ function buildSidebarSnapshot(db: Database, sessionId: string, directory: string
             memoryCount,
             memoryBlockCount,
             pendingOpsCount,
-            historianRunning: compartmentInProgress,
-            compartmentInProgress,
+        historianRunning: compartmentInProgress,
+        compartmentInProgress,
+        compressionTotalMessages: compressionTotal,
+        compressionDoneMessages: compressionDone,
             sessionNoteCount,
             readySmartNoteCount,
             cacheTtl,

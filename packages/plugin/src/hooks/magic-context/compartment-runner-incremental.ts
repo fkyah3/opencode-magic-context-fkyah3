@@ -10,6 +10,7 @@ import { getMemoriesByProject } from "../../features/magic-context/memory/storag
 import {
     clearEmergencyRecovery,
     clearHistorianFailureState,
+    getProtectedTailStartOrdinal,
     incrementHistorianFailure,
 } from "../../features/magic-context/storage";
 import { updateSessionMeta } from "../../features/magic-context/storage-meta";
@@ -100,6 +101,13 @@ export async function runCompartmentAgent(deps: CompartmentRunnerDeps): Promise<
         if (protectedTailStart <= offset) {
             return;
         }
+
+        // 记录压缩进度总消息量
+        const totalMessages = protectedTailStart - offset;
+        updateSessionMeta(deps.db, sessionId, {
+            compressionTotalMessages: totalMessages,
+            compressionProcessedMessages: 0,
+        });
 
         const chunk = readSessionChunk(sessionId, historianChunkTokens, offset, protectedTailStart);
         if (!chunk.text || chunk.messageCount === 0) {
@@ -218,6 +226,10 @@ export async function runCompartmentAgent(deps: CompartmentRunnerDeps): Promise<
             // stays — it's the authoritative real limit and remains valuable
             // for pressure math going forward.
             clearEmergencyRecovery(db, sessionId);
+        })();
+        // 更新压缩进度：已处理的消息数
+        db.transaction(() => {
+            updateSessionMeta(db, sessionId, { compressionProcessedMessages: lastNewEnd });
         })();
         // Invalidate in-memory injection cache so the next transform rebuilds <session-history>
         // with the new compartments/facts. Without this, cached stale content persists.
