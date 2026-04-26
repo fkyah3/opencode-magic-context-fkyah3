@@ -14,6 +14,8 @@ export interface SessionMetaRow {
     last_input_tokens: number;
     times_execute_threshold_reached: number;
     compartment_in_progress: number;
+    compression_total_messages: number;
+    compression_processed_messages: number;
     // Intentional: type is string (MD5 hex digest), but the guard accepts string|number
     // for backward compatibility with pre-release DBs where the column was INTEGER.
     system_prompt_hash: string | number;
@@ -35,6 +37,8 @@ export const META_COLUMNS: Record<string, string> = {
     lastInputTokens: "last_input_tokens",
     timesExecuteThresholdReached: "times_execute_threshold_reached",
     compartmentInProgress: "compartment_in_progress",
+    compressionTotalMessages: "compression_total_messages",
+    compressionProcessedMessages: "compression_processed_messages",
     systemPromptHash: "system_prompt_hash",
     systemPromptTokens: "system_prompt_tokens",
     conversationTokens: "conversation_tokens",
@@ -79,6 +83,8 @@ export function isSessionMetaRow(row: unknown): row is SessionMetaRow {
         // falls back to 0 for NULL.
         isNumberOrNull(r.times_execute_threshold_reached) &&
         isNumberOrNull(r.compartment_in_progress) &&
+        isNumberOrNull(r.compression_total_messages) &&
+        isNumberOrNull(r.compression_processed_messages) &&
         (r.system_prompt_hash === null ||
             typeof r.system_prompt_hash === "string" ||
             typeof r.system_prompt_hash === "number") &&
@@ -103,6 +109,8 @@ export function getDefaultSessionMeta(sessionId: string): SessionMeta {
         lastInputTokens: 0,
         timesExecuteThresholdReached: 0,
         compartmentInProgress: false,
+        compressionTotalMessages: 0,
+        compressionProcessedMessages: 0,
         systemPromptHash: "",
         systemPromptTokens: 0,
         conversationTokens: 0,
@@ -164,6 +172,8 @@ export function toSessionMeta(row: SessionMetaRow): SessionMeta {
         lastInputTokens: row.last_input_tokens,
         timesExecuteThresholdReached: numOrZero(row.times_execute_threshold_reached),
         compartmentInProgress: row.compartment_in_progress === 1,
+        compressionTotalMessages: numOrZero(row.compression_total_messages),
+        compressionProcessedMessages: numOrZero(row.compression_processed_messages),
         systemPromptHash: String(systemPromptHashRaw),
         systemPromptTokens: numOrZero(row.system_prompt_tokens),
         conversationTokens: numOrZero(row.conversation_tokens),

@@ -10,7 +10,6 @@ import { getMemoriesByProject } from "../../features/magic-context/memory/storag
 import {
     clearEmergencyRecovery,
     clearHistorianFailureState,
-    getProtectedTailStartOrdinal,
     incrementHistorianFailure,
 } from "../../features/magic-context/storage";
 import { updateSessionMeta } from "../../features/magic-context/storage-meta";

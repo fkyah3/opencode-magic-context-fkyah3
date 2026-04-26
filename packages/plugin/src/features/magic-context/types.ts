@@ -32,6 +32,8 @@ export interface SessionMeta {
     lastInputTokens: number;
     timesExecuteThresholdReached: number;
     compartmentInProgress: boolean;
+    compressionTotalMessages: number;
+    compressionProcessedMessages: number;
     systemPromptHash: string;
     systemPromptTokens: number;
     conversationTokens: number;

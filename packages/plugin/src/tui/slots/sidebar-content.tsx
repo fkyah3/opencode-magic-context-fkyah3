@@ -7,6 +7,24 @@ import { loadSidebarSnapshot, type SidebarSnapshot } from "../data/context-db"
 const SINGLE_BORDER = { type: "single" } as any
 const REFRESH_DEBOUNCE_MS = 150
 
+/** Tracks compression state transitions for idle/working/justDone display */
+function useCompressionStatus(compressing: () => boolean) {
+    const [state, setState] = createSignal<'idle' | 'working' | 'justDone'>('idle')
+    const [doneAt, setDoneAt] = createSignal<number>(0)
+    let prev = false
+    createEffect(() => {
+        const now = compressing()
+        if (now && !prev) { setState('working') }
+        else if (!now && prev) {
+            setState('justDone')
+            setDoneAt(Date.now())
+            setTimeout(() => setState('idle'), 15_000)
+        }
+        prev = now
+    })
+    return { state, doneAt }
+}
+
 function compactTokens(value: number): string {
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
     if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`
@@ -246,6 +264,7 @@ const SidebarContent = (props: {
     theme: TuiThemeCurrent
 }) => {
     const [snapshot, setSnapshot] = createSignal<SidebarSnapshot | null>(null)
+    const { state, doneAt } = useCompressionStatus(() => snapshot()?.compartmentInProgress ?? false)
     let refreshTimer: ReturnType<typeof setTimeout> | undefined
 
     const refresh = () => {
