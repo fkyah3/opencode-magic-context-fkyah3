@@ -358,27 +358,57 @@ const SidebarContent = (props: {
                 </box>
             )}
 
-            {/* Historian section */}
+            {/* 压缩处理器 section */}
             <box width="100%" marginTop={1} flexDirection="row" justifyContent="space-between">
                 <text fg={props.theme.text}>
-                    <b>Historian</b>
+                    <b>压缩处理器</b>
                 </text>
-                {s()?.compartmentInProgress ? (
-                    <text fg={props.theme.warning}>working ⟳</text>
-                ) : (
-                    <text fg={props.theme.textMuted}>idle</text>
-                )}
+                {(() => {
+                    const cs = state()
+                    if (cs === "压缩中") {
+                        return <text fg={props.theme.warning}>working ⟳</text>
+                    }
+                    if (cs === "刚完成") {
+                        const ago = Math.floor((Date.now() - doneAt()) / 1000)
+                        return <text fg={props.theme.success}>完成于 ({ago}s ago)</text>
+                    }
+                    return <text fg={props.theme.textMuted}>闲置中</text>
+                })()}
             </box>
             {(() => {
+                const cs = state()
                 const snap = s()
-                if (!snap || !snap.compartmentInProgress) return null
-                const total = snap.compressionTotalMessages
-                const done = snap.compressionDoneMessages
-                const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0
+                if (!snap) { return }
+                if (cs === "刚完成") {
+                    const total = snap.compressionTotalMessages
+                    const done = snap.compressionDoneMessages
+                    const pct = total > 0 ? min(100, round((done / total) * 100)) : 0
+                    return (
+                        <box width="100%" marginTop={0}>
+                            <text fg={props.theme.success} wrap="end">
+                                压缩完成 {((done / 1000).toFixed(0))}k/{((total / 1000).toFixed(0))}k msgs ({pct}%)
+                            </text>
+                        </box>
+                    )
+                }
+                if (cs === "压缩中") {
+                    const total = snap.compressionTotalMessages
+                    const done = snap.compressionDoneMessages
+                    const pct = total > 0 ? min(100, round((done / total) * 100)) : 0
+                    return (
+                        <box width="100%" marginTop={0}>
+                            <text fg={props.theme.accent} wrap="end">
+                                压缩中 {((done / 1000).toFixed(0))}k/{((total / 1000).toFixed(0))}k msgs ({pct}%)
+                            </text>
+                        </box>
+                    )
+                }
+                return
+            })()}total) * 100)) : 0
                 return (
                     <box width="100%" marginTop={0}>
                         <text fg={props.theme.accent} wrap="end">
-                            compacting {((done / 1000).toFixed(0))}k/{((total / 1000).toFixed(0))}k msgs ({pct}%)
+                            压缩中 {((done / 1000).toFixed(0))}k/{((total / 1000).toFixed(0))}k msgs ({pct}%)
                         </text>
                     </box>
                 )
