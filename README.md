@@ -1,3 +1,9 @@
+> **⚠️ ARCHIVED — No longer maintained.**  
+> This project has been archived. All development has moved to [fkyah3/opencode-yg](https://github.com/fkyah3/opencode-yg) as part of a complete redesign.  
+> This repository is preserved for reference only — no further updates or bug fixes will be made.
+
+---
+
 <p align="center"><b>fkyah3/opencode-magic-context-fkyah3</b><br>
 <code>Cache-aware context management · AI-crafted fork</code></p>
 

@@ -1,3 +1,9 @@
+> **⚠️ 已归档 — 不再维护更新。**  
+> 本项目已归档，所有开发已迁移至 [fkyah3/opencode-yg](https://github.com/fkyah3/opencode-yg) 进行完全重构。  
+> 本仓库仅保留供参考，不再进行任何功能更新或 bug 修复。
+
+---
+
 <p align="center"><b>fkyah3/opencode-magic-context-fkyah3</b><br>
 <code>缓存感知上下文管理 · AI 构建分支</code></p>
 
